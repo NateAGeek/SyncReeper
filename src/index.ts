@@ -43,36 +43,39 @@ const directories = createDirectories({
 // Phase 2: Security Hardening
 // ============================================================================
 
+// IMPORTANT: All apt operations must be serialized to avoid lock contention.
+// The dependency chain is: firewall -> sshguard -> autoUpdates -> githubSync -> syncthing
+
 // Configure UFW firewall (SSH only)
 const firewall = setupFirewall({
     dependsOn: [serviceUser.resource],
 });
 
 // Setup SSHGuard for brute-force protection
-const _sshguard = setupSSHGuard({
+const sshguard = setupSSHGuard({
     dependsOn: firewall.resources,
 });
 
 // Configure automatic security updates
-const _autoUpdates = setupAutoUpdates({
+const autoUpdates = setupAutoUpdates({
     autoReboot: true,
-    dependsOn: [serviceUser.resource],
+    dependsOn: sshguard.resources,
 });
 
 // ============================================================================
 // Phase 3: Application Services
 // ============================================================================
 
-// Setup GitHub repository sync
-const _githubSync = setupGitHubSync({
+// Setup GitHub repository sync (depends on autoUpdates for apt serialization)
+const githubSync = setupGitHubSync({
     config,
-    dependsOn: [directories.resource, ...firewall.resources],
+    dependsOn: [directories.resource, ...autoUpdates.resources],
 });
 
-// Setup Syncthing for cross-device sync
+// Setup Syncthing for cross-device sync (depends on githubSync for apt serialization)
 const _syncthing = setupSyncthing({
     config,
-    dependsOn: [directories.resource, ...firewall.resources],
+    dependsOn: [directories.resource, ...githubSync.resources],
 });
 
 // ============================================================================
