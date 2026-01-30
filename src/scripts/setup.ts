@@ -66,11 +66,16 @@ async function main(): Promise<void> {
     // Syncthing Configuration
     console.log("\n📡 Syncthing Configuration\n");
 
-    const syncthingApiKey = await password({
-        message: "Syncthing API Key (generate a random string):",
-        default: generateRandomKey(32),
+    const generatedApiKey = generateRandomKey(32);
+    console.log(`  Generated API Key: ${generatedApiKey}`);
+    console.log("  (Press Enter to use this, or type your own)\n");
+
+    const syncthingApiKeyInput = await input({
+        message: "Syncthing API Key:",
+        default: generatedApiKey,
         validate: (v) => v.length >= 16 || "API key must be at least 16 characters",
     });
+    const syncthingApiKey = syncthingApiKeyInput || generatedApiKey;
 
     const trustedDevicesInput = await input({
         message: "Trusted device IDs (comma-separated, or leave empty):",
