@@ -1,0 +1,10 @@
+# Prettier ignore file
+
+# Build outputs
+dist/
+
+# Dependencies
+node_modules/
+
+# Lock files
+package-lock.json

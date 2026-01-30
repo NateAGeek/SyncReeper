@@ -1,0 +1,17 @@
+# Prettier ignore file
+
+# Build outputs
+dist/
+sync/dist/
+
+# Dependencies
+node_modules/
+sync/node_modules/
+
+# Pulumi state
+.pulumi/
+
+# Lock files (formatting can break them)
+package-lock.json
+pnpm-lock.yaml
+sync/package-lock.json

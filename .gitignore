@@ -1,0 +1,8 @@
+node_modules/
+dist/
+sync/dist/
+*.log
+.pulumi/
+Pulumi.*.yaml
+!Pulumi.yaml
+.env
