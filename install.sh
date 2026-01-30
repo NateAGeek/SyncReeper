@@ -16,6 +16,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Ensure common bin paths are in PATH (for freshly installed tools)
+export PATH="$HOME/.pulumi/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
+
 # Print functions
 info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -120,6 +123,35 @@ install_pulumi() {
     
     # Add to PATH for current session
     export PATH="$HOME/.pulumi/bin:$PATH"
+    
+    # Also add to shell profile for future sessions
+    SHELL_NAME=$(basename "$SHELL")
+    PROFILE_FILE=""
+    
+    case $SHELL_NAME in
+        bash)
+            if [[ -f "$HOME/.bashrc" ]]; then
+                PROFILE_FILE="$HOME/.bashrc"
+            elif [[ -f "$HOME/.bash_profile" ]]; then
+                PROFILE_FILE="$HOME/.bash_profile"
+            fi
+            ;;
+        zsh)
+            PROFILE_FILE="$HOME/.zshrc"
+            ;;
+        fish)
+            PROFILE_FILE="$HOME/.config/fish/config.fish"
+            ;;
+    esac
+    
+    if [[ -n "$PROFILE_FILE" ]] && [[ -f "$PROFILE_FILE" ]]; then
+        if ! grep -q '.pulumi/bin' "$PROFILE_FILE" 2>/dev/null; then
+            echo '' >> "$PROFILE_FILE"
+            echo '# Pulumi' >> "$PROFILE_FILE"
+            echo 'export PATH="$HOME/.pulumi/bin:$PATH"' >> "$PROFILE_FILE"
+            info "Added Pulumi to PATH in $PROFILE_FILE"
+        fi
+    fi
     
     success "Pulumi $(pulumi version) installed"
 }
