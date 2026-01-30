@@ -104,12 +104,13 @@ async function main(): Promise<void> {
 
     const useDefaults = await confirm({
         message:
-            "Use default settings for sync schedule (daily at 3 AM) and repos path (/srv/repos)?",
+            "Use default settings for sync schedule (daily at 3 AM), repos path (/srv/repos), and folder ID (repos)?",
         default: true,
     });
 
     let syncSchedule = "daily";
     let reposPath = "/srv/repos";
+    let syncthingFolderId = "repos";
 
     if (!useDefaults) {
         syncSchedule = await input({
@@ -120,6 +121,13 @@ async function main(): Promise<void> {
         reposPath = await input({
             message: "Repository storage path:",
             default: "/srv/repos",
+        });
+
+        syncthingFolderId = await input({
+            message: "Syncthing folder ID (must match on all devices):",
+            default: "repos",
+            validate: (v) =>
+                /^[a-zA-Z0-9_-]+$/.test(v) || "Only alphanumeric, dash, and underscore allowed",
         });
     }
 
@@ -134,6 +142,7 @@ async function main(): Promise<void> {
     console.log(`  SSH Keys:           ${sshKeys.length} key(s)`);
     console.log(`  Sync Schedule:      ${syncSchedule}`);
     console.log(`  Repos Path:         ${reposPath}`);
+    console.log(`  Syncthing Folder ID: ${syncthingFolderId}`);
     console.log();
 
     const proceed = await confirm({
@@ -156,6 +165,7 @@ async function main(): Promise<void> {
     await runPulumiConfigJson("ssh-authorized-keys", sshKeys);
     await runPulumiConfig("sync-schedule", syncSchedule);
     await runPulumiConfig("repos-path", reposPath);
+    await runPulumiConfig("syncthing-folder-id", syncthingFolderId);
 
     console.log("\n✅ Configuration saved successfully!\n");
     console.log("Next steps:");

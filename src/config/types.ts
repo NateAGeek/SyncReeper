@@ -20,6 +20,8 @@ export interface SyncthingConfig {
     apiKey: string;
     /** List of trusted device IDs that can connect */
     trustedDevices: string[];
+    /** Folder ID for the shared repos folder (must match on all devices) */
+    folderId: string;
 }
 
 /**
@@ -53,10 +55,11 @@ export interface SyncReeperConfig {
 /**
  * Default configuration values
  */
-export const DEFAULT_CONFIG: Partial<SyncConfig> = {
+export const DEFAULT_CONFIG = {
     schedule: "daily",
     reposPath: "/srv/repos",
-};
+    syncthingFolderId: "repos",
+} as const;
 
 /**
  * Service user configuration

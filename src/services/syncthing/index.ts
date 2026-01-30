@@ -11,6 +11,7 @@ import { runCommand, writeFile, enableService } from "../../lib/command.js";
 import { PATHS, SERVICE_USER } from "../../config/types.js";
 import type { SyncReeperConfig } from "../../config/types.js";
 import { generateSyncthingConfig, type SyncthingDevice } from "./config.js";
+import { generateStignoreContent } from "./stignore.js";
 
 export interface SetupSyncthingOptions {
     /** SyncReeper configuration */
@@ -98,7 +99,7 @@ export function setupSyncthing(options: SetupSyncthingOptions): SetupSyncthingRe
         apiKey: config.syncthing.apiKey,
         devices,
         folderPath: config.sync.reposPath,
-        folderId: "repos",
+        folderId: config.syncthing.folderId,
         folderLabel: "GitHub Repositories",
     });
 
@@ -112,6 +113,20 @@ export function setupSyncthing(options: SetupSyncthingOptions): SetupSyncthingRe
         dependsOn: [createConfigDir],
     });
     resources.push(writeConfig);
+
+    // Create .stignore file in repos directory
+    // This file controls which files are NOT synced across devices
+    const stignoreContent = generateStignoreContent();
+    const writeStignore = writeFile({
+        name: "syncthing-stignore",
+        path: `${config.sync.reposPath}/.stignore`,
+        content: stignoreContent,
+        mode: "644",
+        owner: username,
+        group: username,
+        dependsOn: [createConfigDir],
+    });
+    resources.push(writeStignore);
 
     // Create systemd service override
     const createOverrideDir = runCommand({
@@ -205,3 +220,4 @@ export {
     type SyncthingDevice,
     type SyncthingConfigOptions,
 } from "./config.js";
+export { generateStignoreContent } from "./stignore.js";

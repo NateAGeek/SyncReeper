@@ -28,6 +28,7 @@ export function getConfig(): SyncReeperConfig {
     const syncthing: SyncthingConfig = {
         apiKey: config.requireSecret("syncthing-api-key").apply((k) => k),
         trustedDevices: config.requireObject<string[]>("syncthing-trusted-devices"),
+        folderId: config.get("syncthing-folder-id") ?? DEFAULT_CONFIG.syncthingFolderId,
     } as unknown as SyncthingConfig;
 
     const ssh: SSHConfig = {
@@ -35,8 +36,8 @@ export function getConfig(): SyncReeperConfig {
     };
 
     const sync: SyncConfig = {
-        schedule: config.get("sync-schedule") ?? DEFAULT_CONFIG.schedule!,
-        reposPath: config.get("repos-path") ?? DEFAULT_CONFIG.reposPath!,
+        schedule: config.get("sync-schedule") ?? DEFAULT_CONFIG.schedule,
+        reposPath: config.get("repos-path") ?? DEFAULT_CONFIG.reposPath,
     };
 
     return { github, syncthing, ssh, sync };
@@ -54,9 +55,10 @@ export function getConfigValues() {
         githubUsername: config.require("github-username"),
         syncthingApiKey: config.requireSecret("syncthing-api-key"),
         syncthingTrustedDevices: config.requireObject<string[]>("syncthing-trusted-devices"),
+        syncthingFolderId: config.get("syncthing-folder-id") ?? DEFAULT_CONFIG.syncthingFolderId,
         sshAuthorizedKeys: config.requireObject<string[]>("ssh-authorized-keys"),
-        syncSchedule: config.get("sync-schedule") ?? DEFAULT_CONFIG.schedule!,
-        reposPath: config.get("repos-path") ?? DEFAULT_CONFIG.reposPath!,
+        syncSchedule: config.get("sync-schedule") ?? DEFAULT_CONFIG.schedule,
+        reposPath: config.get("repos-path") ?? DEFAULT_CONFIG.reposPath,
     };
 }
 
