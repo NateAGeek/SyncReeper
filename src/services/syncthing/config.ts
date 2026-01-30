@@ -44,11 +44,11 @@ export function generateSyncthingConfig(options: SyncthingConfigOptions): string
         folderLabel = "Repositories",
     } = options;
 
-    // Build device entries for the folder
+    // Build device entries for the folder (attributes without @ prefix for ele() method)
     const folderDevices = devices.map((d) => ({
-        "@id": d.id,
-        "@introducedBy": "",
-        "@encryptionPassword": "",
+        id: d.id,
+        introducedBy: "",
+        encryptionPassword: "",
     }));
 
     const doc = create({ version: "1.0", encoding: "UTF-8" })
