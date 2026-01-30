@@ -137,14 +137,14 @@ export function setupGitHubSync(options: SetupGitHubSyncOptions): SetupGitHubSyn
     const resources: pulumi.Resource[] = [];
     const { name: username } = SERVICE_USER;
 
-    // Install Node.js
+    // Install Node.js (with apt lock timeout to handle concurrent apt operations)
     const installNode = runCommand({
         name: "install-nodejs",
         create: `
             # Install Node.js 20.x from NodeSource
             if ! command -v node &> /dev/null; then
                 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-                apt-get install -y nodejs
+                apt-get -o DPkg::Lock::Timeout=300 install -y nodejs
             fi
             node --version
             npm --version

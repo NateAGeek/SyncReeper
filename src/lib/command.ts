@@ -105,13 +105,28 @@ export interface InstallPackagesOptions {
 }
 
 /**
+ * APT lock timeout in seconds (5 minutes)
+ * This allows apt to wait for other apt processes to finish
+ */
+const APT_LOCK_TIMEOUT = 300;
+
+/**
+ * Generates apt command with lock timeout
+ * Uses DPkg::Lock::Timeout to wait for locks instead of failing immediately
+ */
+export function generateAptInstallCommand(packages: string[]): string {
+    const packageList = packages.join(" ");
+    return `apt-get -o DPkg::Lock::Timeout=${APT_LOCK_TIMEOUT} update && DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=${APT_LOCK_TIMEOUT} install -y ${packageList}`;
+}
+
+/**
  * Installs packages using apt-get
+ * Includes lock timeout to handle concurrent apt operations
  */
 export function installPackages(options: InstallPackagesOptions): command.local.Command {
     const { name, packages, dependsOn } = options;
 
-    const packageList = packages.join(" ");
-    const createCmd = `apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ${packageList}`;
+    const createCmd = generateAptInstallCommand(packages);
 
     return new command.local.Command(
         name,

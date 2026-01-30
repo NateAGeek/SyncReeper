@@ -3,13 +3,16 @@
  *
  * SSHGuard monitors auth logs and blocks IPs that show malicious behavior.
  * On Ubuntu 24.04, it integrates with UFW automatically.
+ *
+ * Note: SSHGuard is installed by the packages service.
+ * This service only handles configuration.
  */
 
 import type * as pulumi from "@pulumi/pulumi";
-import { runCommand, installPackages, enableService } from "../../lib/command.js";
+import { runCommand, enableService } from "../../lib/command.js";
 
 export interface SetupSSHGuardOptions {
-    /** Resources to depend on (should include firewall setup) */
+    /** Resources to depend on (should include packages service) */
     dependsOn?: pulumi.Resource[];
 }
 
@@ -51,22 +54,15 @@ function generateWhitelistContent(): string {
 
 /**
  * Sets up SSHGuard for brute-force protection
- * - Installs SSHGuard package
  * - Configures with aggressive settings
  * - Integrates with UFW
  * - Enables and starts the service
+ *
+ * Prerequisites: SSHGuard must be installed (handled by packages service)
  */
 export function setupSSHGuard(options: SetupSSHGuardOptions = {}): SetupSSHGuardResult {
     const { dependsOn = [] } = options;
     const resources: pulumi.Resource[] = [];
-
-    // Install SSHGuard
-    const installSSHGuard = installPackages({
-        name: "install-sshguard",
-        packages: ["sshguard"],
-        dependsOn,
-    });
-    resources.push(installSSHGuard);
 
     // Create whitelist file
     const whitelistContent = generateWhitelistContent();
@@ -81,7 +77,7 @@ EOF
             echo "SSHGuard whitelist created"
         `.trim(),
         delete: `rm -f /etc/sshguard/whitelist`,
-        dependsOn: [installSSHGuard],
+        dependsOn,
     });
     resources.push(createWhitelist);
 

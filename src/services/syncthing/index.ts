@@ -51,7 +51,7 @@ export function setupSyncthing(options: SetupSyncthingOptions): SetupSyncthingRe
     const resources: pulumi.Resource[] = [];
     const { name: username } = SERVICE_USER;
 
-    // Add Syncthing APT repository and install
+    // Add Syncthing APT repository and install (with lock timeout)
     const installSyncthing = runCommand({
         name: "install-syncthing",
         create: `
@@ -62,9 +62,9 @@ export function setupSyncthing(options: SetupSyncthingOptions): SetupSyncthingRe
             # Add the stable channel
             echo "deb [signed-by=/etc/apt/keyrings/syncthing.gpg] https://apt.syncthing.net/ syncthing stable" | tee /etc/apt/sources.list.d/syncthing.list
             
-            # Install
-            apt-get update
-            apt-get install -y syncthing
+            # Install with lock timeout to handle concurrent apt operations
+            apt-get -o DPkg::Lock::Timeout=300 update
+            apt-get -o DPkg::Lock::Timeout=300 install -y syncthing
             
             syncthing --version
         `.trim(),

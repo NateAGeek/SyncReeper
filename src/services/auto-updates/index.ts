@@ -3,17 +3,20 @@
  *
  * Configures unattended-upgrades to automatically install security updates.
  * This is crucial for a VPS to stay secure without manual intervention.
+ *
+ * Note: unattended-upgrades is installed by the packages service.
+ * This service only handles configuration.
  */
 
 import type * as pulumi from "@pulumi/pulumi";
-import { runCommand, installPackages, writeFile, enableService } from "../../lib/command.js";
+import { runCommand, writeFile, enableService } from "../../lib/command.js";
 
 export interface SetupAutoUpdatesOptions {
     /** Email address for update notifications (optional) */
     notifyEmail?: string;
     /** Automatic reboot if required (default: true, at 3 AM) */
     autoReboot?: boolean;
-    /** Resources to depend on */
+    /** Resources to depend on (should include packages service) */
     dependsOn?: pulumi.Resource[];
 }
 
@@ -74,21 +77,14 @@ APT::Periodic::Unattended-Upgrade "1";
 
 /**
  * Sets up automatic security updates
- * - Installs unattended-upgrades package
  * - Configures for security updates only
  * - Enables automatic reboot if required
+ *
+ * Prerequisites: unattended-upgrades must be installed (handled by packages service)
  */
 export function setupAutoUpdates(options: SetupAutoUpdatesOptions = {}): SetupAutoUpdatesResult {
     const { autoReboot = true, dependsOn = [] } = options;
     const resources: pulumi.Resource[] = [];
-
-    // Install unattended-upgrades
-    const installPackage = installPackages({
-        name: "install-unattended-upgrades",
-        packages: ["unattended-upgrades", "apt-listchanges"],
-        dependsOn,
-    });
-    resources.push(installPackage);
 
     // Write unattended-upgrades config
     const unattendedConfig = generateUnattendedUpgradesConfig({ autoReboot });
@@ -99,7 +95,7 @@ export function setupAutoUpdates(options: SetupAutoUpdatesOptions = {}): SetupAu
         mode: "644",
         owner: "root",
         group: "root",
-        dependsOn: [installPackage],
+        dependsOn,
     });
     resources.push(writeUnattendedConfig);
 
@@ -112,7 +108,7 @@ export function setupAutoUpdates(options: SetupAutoUpdatesOptions = {}): SetupAu
         mode: "644",
         owner: "root",
         group: "root",
-        dependsOn: [installPackage],
+        dependsOn,
     });
     resources.push(writeAutoUpgradesConfig);
 

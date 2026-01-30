@@ -6,16 +6,19 @@
  * - Only SSH (port 22) is exposed with rate limiting
  * - Syncthing communicates via relay servers (outbound)
  * - Syncthing GUI accessed via SSH tunnel
+ *
+ * Note: UFW is installed by the packages service.
+ * This service only handles configuration.
  */
 
 import type * as pulumi from "@pulumi/pulumi";
-import { runCommand, installPackages } from "../../lib/command.js";
+import { runCommand } from "../../lib/command.js";
 import { DEFAULT_FIREWALL_RULES, generateFirewallCommands, type FirewallRule } from "./rules.js";
 
 export interface SetupFirewallOptions {
     /** Custom firewall rules (defaults to SSH-only) */
     rules?: FirewallRule[];
-    /** Resources to depend on */
+    /** Resources to depend on (should include packages service) */
     dependsOn?: pulumi.Resource[];
 }
 
@@ -26,21 +29,14 @@ export interface SetupFirewallResult {
 
 /**
  * Sets up UFW firewall with secure defaults
- * - Installs UFW if not present
  * - Configures default deny incoming, allow outgoing
  * - Adds SSH rule with rate limiting
+ *
+ * Prerequisites: UFW must be installed (handled by packages service)
  */
 export function setupFirewall(options: SetupFirewallOptions = {}): SetupFirewallResult {
     const { rules = DEFAULT_FIREWALL_RULES, dependsOn = [] } = options;
     const resources: pulumi.Resource[] = [];
-
-    // Install UFW
-    const installUfw = installPackages({
-        name: "install-ufw",
-        packages: ["ufw"],
-        dependsOn,
-    });
-    resources.push(installUfw);
 
     // Generate all firewall commands
     const firewallCommands = generateFirewallCommands(rules);
@@ -53,7 +49,7 @@ export function setupFirewall(options: SetupFirewallOptions = {}): SetupFirewall
             ufw disable || true
             echo "UFW disabled"
         `.trim(),
-        dependsOn: [installUfw],
+        dependsOn,
     });
     resources.push(configureUfw);
 

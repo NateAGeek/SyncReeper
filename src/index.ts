@@ -6,6 +6,12 @@
  * 2. Clone and sync all GitHub repositories
  * 3. Sync repos across devices using Syncthing
  *
+ * Deployment Phases:
+ * 1. System Setup - Create user and directories
+ * 2. Package Installation - Install ALL packages in one apt operation
+ * 3. Security Hardening - Configure firewall, SSHGuard, auto-updates
+ * 4. Application Services - Configure GitHub sync and Syncthing
+ *
  * Run with: pulumi up
  */
 
@@ -17,6 +23,7 @@ import { createServiceUser } from "./resources/user.js";
 import { createDirectories } from "./resources/directories.js";
 
 // Services
+import { setupPackages } from "./services/packages/index.js";
 import { setupFirewall } from "./services/firewall/index.js";
 import { setupSSHGuard } from "./services/sshguard/index.js";
 import { setupAutoUpdates } from "./services/auto-updates/index.js";
@@ -40,42 +47,52 @@ const directories = createDirectories({
 });
 
 // ============================================================================
-// Phase 2: Security Hardening
+// Phase 2: Package Installation
 // ============================================================================
 
-// IMPORTANT: All apt operations must be serialized to avoid lock contention.
-// The dependency chain is: firewall -> sshguard -> autoUpdates -> githubSync -> syncthing
-
-// Configure UFW firewall (SSH only)
-const firewall = setupFirewall({
+// Install ALL packages in a single apt operation
+// This eliminates apt lock contention between services
+const packages = setupPackages({
     dependsOn: [serviceUser.resource],
 });
 
+// ============================================================================
+// Phase 3: Security Hardening
+// ============================================================================
+
+// All security services depend on packages being installed
+// They can now run in parallel since no apt operations are needed
+
+// Configure UFW firewall (SSH only)
+const _firewall = setupFirewall({
+    dependsOn: packages.resources,
+});
+
 // Setup SSHGuard for brute-force protection
-const sshguard = setupSSHGuard({
-    dependsOn: firewall.resources,
+const _sshguard = setupSSHGuard({
+    dependsOn: packages.resources,
 });
 
 // Configure automatic security updates
-const autoUpdates = setupAutoUpdates({
+const _autoUpdates = setupAutoUpdates({
     autoReboot: true,
-    dependsOn: sshguard.resources,
+    dependsOn: packages.resources,
 });
 
 // ============================================================================
-// Phase 3: Application Services
+// Phase 4: Application Services
 // ============================================================================
 
-// Setup GitHub repository sync (depends on autoUpdates for apt serialization)
-const githubSync = setupGitHubSync({
+// Setup GitHub repository sync
+const _githubSync = setupGitHubSync({
     config,
-    dependsOn: [directories.resource, ...autoUpdates.resources],
+    dependsOn: [directories.resource, ...packages.resources],
 });
 
-// Setup Syncthing for cross-device sync (depends on githubSync for apt serialization)
+// Setup Syncthing for cross-device sync
 const _syncthing = setupSyncthing({
     config,
-    dependsOn: [directories.resource, ...githubSync.resources],
+    dependsOn: [directories.resource, ...packages.resources],
 });
 
 // ============================================================================
