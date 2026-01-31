@@ -10,6 +10,7 @@
         "build:all": "npm run build && npm run build:sync",
         "setup": "npx tsx src/scripts/setup.ts",
         "get-device-id": "npx tsx src/scripts/get-device-id.ts",
+        "add-device": "npx tsx src/scripts/add-device.ts",
         "sync-now": "npx tsx src/scripts/sync-now.ts",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",

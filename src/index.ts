@@ -24,6 +24,7 @@ import { createDirectories } from "./resources/directories.js";
 // Services
 import { setupPackages } from "./services/packages/index.js";
 import { setupFirewall } from "./services/firewall/index.js";
+import { setupSSH } from "./services/ssh/index.js";
 import { setupSSHGuard } from "./services/sshguard/index.js";
 import { setupAutoUpdates } from "./services/auto-updates/index.js";
 import { setupGitHubSync } from "./services/github-sync/index.js";
@@ -65,6 +66,12 @@ const packages = setupPackages({
 // Configure UFW firewall (SSH only)
 const _firewall = setupFirewall({
     dependsOn: packages.resources,
+});
+
+// Harden SSH configuration (disable password auth, root login, restrict to syncreeper user)
+const _ssh = setupSSH({
+    authorizedKeys: config.ssh.authorizedKeys,
+    dependsOn: [serviceUser.resource, ...packages.resources],
 });
 
 // Setup SSHGuard for brute-force protection
@@ -109,6 +116,12 @@ export const outputs = {
 DEPLOYMENT COMPLETE - Next Steps:
 ================================================================================
 
+IMPORTANT: SSH ACCESS HAS BEEN HARDENED
+- Password authentication is DISABLED
+- Root login is DISABLED  
+- Only the 'syncreeper' user can SSH in
+- Connect with: ssh syncreeper@your-vps
+
 1. TRIGGER INITIAL SYNC (required):
    The GitHub sync timer runs daily. To sync repositories immediately:
    
@@ -125,7 +138,7 @@ DEPLOYMENT COMPLETE - Next Steps:
 3. ACCESS SYNCTHING GUI:
    Create an SSH tunnel and open the web interface:
    
-   ssh -L 8384:localhost:8384 user@your-vps
+   ssh -L 8384:localhost:8384 syncreeper@your-vps
    Then open: http://localhost:8384
 
 4. ADD VPS TO OTHER DEVICES:
@@ -142,6 +155,7 @@ DEPLOYMENT COMPLETE - Next Steps:
         viewSyncLogs: "journalctl -u syncreeper-sync -f",
         getDeviceId: "syncreeper-device-id",
         checkFirewall: "sudo ufw status",
+        checkSSH: "sudo sshd -T | grep -E 'passwordauthentication|permitrootlogin|allowusers'",
         checkSyncthing: `systemctl status syncthing@${serviceUser.username}`,
         checkSyncTimer: "systemctl list-timers syncreeper-sync.timer",
     },
