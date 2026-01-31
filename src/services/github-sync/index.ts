@@ -5,10 +5,29 @@
  * for periodic repository synchronization.
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import { runCommand, writeFile, enableService } from "../../lib/command.js";
 import { PATHS, SERVICE_USER } from "../../config/types.js";
 import type { SyncReeperConfig } from "../../config/types.js";
+
+/**
+ * Gets the sync app bundle content
+ * Throws an error if the bundle doesn't exist, prompting user to build first
+ */
+function getSyncAppBundle(): string {
+    const bundlePath = path.join(process.cwd(), "sync", "dist", "bundle.js");
+
+    if (!fs.existsSync(bundlePath)) {
+        throw new Error(
+            `Sync app bundle not found at ${bundlePath}. ` +
+                `Please run 'npm run build:all' before deploying.`
+        );
+    }
+
+    return fs.readFileSync(bundlePath, "utf-8");
+}
 
 export interface SetupGitHubSyncOptions {
     /** SyncReeper configuration */
@@ -57,8 +76,8 @@ EnvironmentFile=/etc/syncreeper/sync.env
 # Working directory
 WorkingDirectory=${PATHS.syncApp}
 
-# Run the sync application
-ExecStart=/usr/bin/node ${PATHS.syncApp}/dist/index.js
+# Run the sync application (using NVM-installed Node.js)
+ExecStart=/usr/local/bin/node ${PATHS.syncApp}/dist/bundle.js
 
 # Logging to journal
 StandardOutput=journal
@@ -128,30 +147,15 @@ echo "  journalctl -u syncreeper-sync -f"
 
 /**
  * Sets up the GitHub sync service
- * - Installs Node.js
  * - Deploys the sync application
  * - Creates systemd service and timer
+ *
+ * Note: Node.js is installed via NVM in the packages service
  */
 export function setupGitHubSync(options: SetupGitHubSyncOptions): SetupGitHubSyncResult {
     const { config, dependsOn = [] } = options;
     const resources: pulumi.Resource[] = [];
     const { name: username } = SERVICE_USER;
-
-    // Install Node.js (with apt lock timeout to handle concurrent apt operations)
-    const installNode = runCommand({
-        name: "install-nodejs",
-        create: `
-            # Install Node.js 20.x from NodeSource
-            if ! command -v node &> /dev/null; then
-                curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-                apt-get -o DPkg::Lock::Timeout=300 install -y nodejs
-            fi
-            node --version
-            npm --version
-        `.trim(),
-        dependsOn,
-    });
-    resources.push(installNode);
 
     // Create environment directory
     const createEnvDir = runCommand({
@@ -162,7 +166,7 @@ export function setupGitHubSync(options: SetupGitHubSyncOptions): SetupGitHubSyn
             chown root:${username} /etc/syncreeper
         `.trim(),
         delete: "rm -rf /etc/syncreeper",
-        dependsOn: [installNode],
+        dependsOn,
     });
     resources.push(createEnvDir);
 
@@ -179,26 +183,41 @@ export function setupGitHubSync(options: SetupGitHubSyncOptions): SetupGitHubSyn
     });
     resources.push(writeEnvFile);
 
-    // Deploy sync application
-    // Note: In a real deployment, you'd copy the built app here
-    // For now, we assume it's deployed via a separate mechanism or built in place
-    const deploySyncApp = runCommand({
-        name: "deploy-sync-app",
+    // Get the bundled sync application
+    const bundleContent = getSyncAppBundle();
+
+    // Create sync app directory
+    const createSyncAppDir = runCommand({
+        name: "create-sync-app-dir",
         create: `
-            # Ensure directory exists
-            mkdir -p ${PATHS.syncApp}
-            chown ${username}:${username} ${PATHS.syncApp}
-            
-            # Note: The actual application files should be deployed here
-            # This could be done via:
-            # 1. Git clone from a releases repo
-            # 2. Copy from local build
-            # 3. Download from releases
-            echo "Sync app directory prepared at ${PATHS.syncApp}"
+            mkdir -p ${PATHS.syncApp}/dist
+            chown -R ${username}:${username} ${PATHS.syncApp}
+            echo "Sync app directory created at ${PATHS.syncApp}"
         `.trim(),
-        dependsOn: [installNode],
+        delete: `rm -rf ${PATHS.syncApp}`,
+        dependsOn,
     });
-    resources.push(deploySyncApp);
+    resources.push(createSyncAppDir);
+
+    // Deploy the bundled sync application
+    const deploySyncBundle = writeFile({
+        name: "deploy-sync-bundle",
+        path: `${PATHS.syncApp}/dist/bundle.js`,
+        content: bundleContent,
+        mode: "644",
+        owner: username,
+        group: username,
+        dependsOn: [createSyncAppDir],
+    });
+    resources.push(deploySyncBundle);
+
+    // Verify the bundle is valid JavaScript
+    const verifySyncBundle = runCommand({
+        name: "verify-sync-bundle",
+        create: `/usr/local/bin/node --check ${PATHS.syncApp}/dist/bundle.js && echo "Sync app bundle verified successfully"`,
+        dependsOn: [deploySyncBundle],
+    });
+    resources.push(verifySyncBundle);
 
     // Write systemd service unit
     const serviceUnit = generateServiceUnit();
@@ -209,7 +228,7 @@ export function setupGitHubSync(options: SetupGitHubSyncOptions): SetupGitHubSyn
         mode: "644",
         owner: "root",
         group: "root",
-        dependsOn: [deploySyncApp, writeEnvFile],
+        dependsOn: [verifySyncBundle, writeEnvFile],
     });
     resources.push(writeServiceUnit);
 

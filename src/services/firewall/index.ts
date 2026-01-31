@@ -67,5 +67,4 @@ export function setupFirewall(options: SetupFirewallOptions = {}): SetupFirewall
     return { resources };
 }
 
-export { DEFAULT_FIREWALL_RULES, generateFirewallCommands, generateRuleCommand } from "./rules.js";
 export type { FirewallRule } from "./rules.js";

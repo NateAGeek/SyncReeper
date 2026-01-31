@@ -95,48 +95,6 @@ chown ${owner}:${group} ${path}`;
     );
 }
 
-export interface InstallPackagesOptions {
-    /** Unique resource name */
-    name: string;
-    /** List of packages to install */
-    packages: string[];
-    /** Resources this depends on */
-    dependsOn?: pulumi.Resource[];
-}
-
-/**
- * APT lock timeout in seconds (5 minutes)
- * This allows apt to wait for other apt processes to finish
- */
-const APT_LOCK_TIMEOUT = 300;
-
-/**
- * Generates apt command with lock timeout
- * Uses DPkg::Lock::Timeout to wait for locks instead of failing immediately
- */
-export function generateAptInstallCommand(packages: string[]): string {
-    const packageList = packages.join(" ");
-    return `apt-get -o DPkg::Lock::Timeout=${APT_LOCK_TIMEOUT} update && DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=${APT_LOCK_TIMEOUT} install -y ${packageList}`;
-}
-
-/**
- * Installs packages using apt-get
- * Includes lock timeout to handle concurrent apt operations
- */
-export function installPackages(options: InstallPackagesOptions): command.local.Command {
-    const { name, packages, dependsOn } = options;
-
-    const createCmd = generateAptInstallCommand(packages);
-
-    return new command.local.Command(
-        name,
-        {
-            create: createCmd,
-        },
-        { dependsOn }
-    );
-}
-
 export interface EnableServiceOptions {
     /** Unique resource name */
     name: string;

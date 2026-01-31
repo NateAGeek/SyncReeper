@@ -43,23 +43,4 @@ export function getConfig(): SyncReeperConfig {
     return { github, syncthing, ssh, sync };
 }
 
-/**
- * Gets individual config values for use in resources
- * Returns Pulumi Outputs where secrets are involved
- */
-export function getConfigValues() {
-    const config = new pulumi.Config("syncreeper");
-
-    return {
-        githubToken: config.requireSecret("github-token"),
-        githubUsername: config.require("github-username"),
-        syncthingApiKey: config.requireSecret("syncthing-api-key"),
-        syncthingTrustedDevices: config.requireObject<string[]>("syncthing-trusted-devices"),
-        syncthingFolderId: config.get("syncthing-folder-id") ?? DEFAULT_CONFIG.syncthingFolderId,
-        sshAuthorizedKeys: config.requireObject<string[]>("ssh-authorized-keys"),
-        syncSchedule: config.get("sync-schedule") ?? DEFAULT_CONFIG.schedule,
-        reposPath: config.get("repos-path") ?? DEFAULT_CONFIG.reposPath,
-    };
-}
-
 export * from "./types.js";

@@ -6,7 +6,7 @@
     "main": "dist/index.js",
     "scripts": {
         "build": "tsc",
-        "build:sync": "tsc -p sync/tsconfig.json",
+        "build:sync": "npm run build --prefix sync",
         "build:all": "npm run build && npm run build:sync",
         "setup": "npx tsx src/scripts/setup.ts",
         "get-device-id": "npx tsx src/scripts/get-device-id.ts",

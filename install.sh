@@ -19,6 +19,19 @@ NC='\033[0m' # No Color
 # Ensure common bin paths are in PATH (for freshly installed tools)
 export PATH="$HOME/.pulumi/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
 
+# NVM configuration
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+NVM_VERSION="v0.40.1"
+NODE_VERSION="20"
+
+# Source NVM if available
+load_nvm() {
+    export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+}
+load_nvm
+
 # Print functions
 info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -66,6 +79,7 @@ command_exists() {
 
 # Get Node.js version
 get_node_version() {
+    load_nvm
     if command_exists node; then
         node --version | sed 's/v//' | cut -d. -f1
     else
@@ -73,39 +87,40 @@ get_node_version() {
     fi
 }
 
-# Install Node.js
-install_nodejs() {
-    info "Installing Node.js..."
+# Install NVM and Node.js
+install_nvm() {
+    info "Installing NVM ${NVM_VERSION} and Node.js ${NODE_VERSION}..."
     
     case $OS in
-        debian)
-            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-            sudo apt-get install -y nodejs
-            ;;
-        fedora)
-            sudo dnf install -y nodejs npm
-            ;;
-        arch)
-            sudo pacman -S --noconfirm nodejs npm
-            ;;
-        macos)
-            if command_exists brew; then
-                brew install node
-            else
-                error "Homebrew not found. Install from https://brew.sh first, or install Node.js manually."
-            fi
+        debian|fedora|arch|macos|linux)
+            # Install NVM
+            curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" | bash
+            
+            # Load NVM for current session
+            load_nvm
+            
+            # Install Node.js
+            info "Installing Node.js ${NODE_VERSION} via NVM..."
+            nvm install "${NODE_VERSION}"
+            nvm alias default "${NODE_VERSION}"
+            nvm use default
             ;;
         windows)
-            warn "Please install Node.js manually from https://nodejs.org"
-            warn "Then re-run this script."
+            warn "On Windows, install NVM for Windows:"
+            warn "  1. Download from: https://github.com/coreybutler/nvm-windows/releases"
+            warn "  2. Run the installer (nvm-setup.exe)"
+            warn "  3. Open a NEW terminal (cmd or PowerShell) and run:"
+            warn "       nvm install ${NODE_VERSION}"
+            warn "       nvm use ${NODE_VERSION}"
+            warn "  4. Re-run this script."
             exit 1
             ;;
         *)
-            error "Unsupported OS. Please install Node.js 18+ manually."
+            error "Unsupported OS. Please install NVM manually from https://github.com/nvm-sh/nvm"
             ;;
     esac
     
-    success "Node.js $(node --version) installed"
+    success "Node.js $(node --version) installed via NVM"
 }
 
 # Install Pulumi
@@ -207,22 +222,24 @@ main() {
         install_git
     fi
     
-    # Check Node.js
-    NODE_VERSION=$(get_node_version)
-    if [[ "$NODE_VERSION" -ge 18 ]]; then
-        success "Node.js is installed (v$NODE_VERSION)"
+    # Check Node.js (via NVM)
+    load_nvm
+    NODE_VERSION_INSTALLED=$(get_node_version)
+    if [[ "$NODE_VERSION_INSTALLED" -ge 18 ]]; then
+        success "Node.js is installed (v$NODE_VERSION_INSTALLED) via NVM"
     else
-        if [[ "$NODE_VERSION" -gt 0 ]]; then
-            warn "Node.js v$NODE_VERSION found, but v18+ is required"
+        if [[ "$NODE_VERSION_INSTALLED" -gt 0 ]]; then
+            warn "Node.js v$NODE_VERSION_INSTALLED found, but v18+ is required"
         fi
-        install_nodejs
+        install_nvm
     fi
     
-    # Check npm
+    # Check npm (NVM provides npm with Node.js)
+    load_nvm
     if command_exists npm; then
         success "npm is installed ($(npm --version))"
     else
-        error "npm not found. Please reinstall Node.js."
+        error "npm not found. Please reinstall Node.js via NVM: nvm install ${NODE_VERSION}"
     fi
     
     # Check Pulumi
@@ -262,8 +279,18 @@ main() {
     
     echo ""
     info "Building project..."
+    info "  - Building Pulumi infrastructure code..."
+    info "  - Bundling sync application with Rollup..."
     npm run build:all
     success "Project built successfully"
+    
+    # Verify the sync bundle was created
+    if [ -f "sync/dist/bundle.js" ]; then
+        BUNDLE_SIZE=$(du -h sync/dist/bundle.js | cut -f1)
+        success "Sync app bundle created (${BUNDLE_SIZE})"
+    else
+        error "Sync app bundle not found at sync/dist/bundle.js"
+    fi
     
     echo ""
     info "Running lint and format checks..."

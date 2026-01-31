@@ -1,9 +1,12 @@
 /**
  * Syncthing Service
  *
- * Installs and configures Syncthing to sync repositories across devices.
+ * Configures Syncthing to sync repositories across devices.
  * Syncthing runs as the syncreeper user and communicates via relay servers.
  * The GUI is only accessible via SSH tunnel.
+ *
+ * Note: Syncthing is installed by the packages service.
+ * This service only handles configuration.
  */
 
 import type * as pulumi from "@pulumi/pulumi";
@@ -41,41 +44,16 @@ Environment="STHOME=${home}/.config/syncthing"
 
 /**
  * Sets up Syncthing for repository synchronization
- * - Installs Syncthing from official APT repository
  * - Generates config.xml with trusted devices
  * - Runs as syncreeper user
  * - Only listens on localhost (access via SSH tunnel)
+ *
+ * Prerequisites: Syncthing must be installed (handled by packages service)
  */
 export function setupSyncthing(options: SetupSyncthingOptions): SetupSyncthingResult {
     const { config, dependsOn = [] } = options;
     const resources: pulumi.Resource[] = [];
     const { name: username } = SERVICE_USER;
-
-    // Add Syncthing APT repository and install (with lock timeout)
-    const installSyncthing = runCommand({
-        name: "install-syncthing",
-        create: `
-            # Add Syncthing release PGP keys
-            mkdir -p /etc/apt/keyrings
-            curl -fsSL https://syncthing.net/release-key.gpg | gpg --dearmor -o /etc/apt/keyrings/syncthing.gpg
-            
-            # Add the stable channel
-            echo "deb [signed-by=/etc/apt/keyrings/syncthing.gpg] https://apt.syncthing.net/ syncthing stable" | tee /etc/apt/sources.list.d/syncthing.list
-            
-            # Install with lock timeout to handle concurrent apt operations
-            apt-get -o DPkg::Lock::Timeout=300 update
-            apt-get -o DPkg::Lock::Timeout=300 install -y syncthing
-            
-            syncthing --version
-        `.trim(),
-        delete: `
-            apt-get remove -y syncthing || true
-            rm -f /etc/apt/sources.list.d/syncthing.list
-            rm -f /etc/apt/keyrings/syncthing.gpg
-        `.trim(),
-        dependsOn,
-    });
-    resources.push(installSyncthing);
 
     // Create Syncthing config directory
     const createConfigDir = runCommand({
@@ -85,7 +63,7 @@ export function setupSyncthing(options: SetupSyncthingOptions): SetupSyncthingRe
             chown ${username}:${username} ${PATHS.syncthingConfig}
             chmod 700 ${PATHS.syncthingConfig}
         `.trim(),
-        dependsOn: [installSyncthing],
+        dependsOn,
     });
     resources.push(createConfigDir);
 
@@ -135,7 +113,7 @@ export function setupSyncthing(options: SetupSyncthingOptions): SetupSyncthingRe
             mkdir -p /etc/systemd/system/syncthing@${username}.service.d
         `.trim(),
         delete: `rm -rf /etc/systemd/system/syncthing@${username}.service.d`,
-        dependsOn: [installSyncthing],
+        dependsOn,
     });
     resources.push(createOverrideDir);
 

@@ -3,10 +3,10 @@
     "version": "1.0.0",
     "description": "GitHub repository sync application for SyncReeper",
     "type": "module",
-    "main": "dist/index.js",
+    "main": "dist/bundle.js",
     "scripts": {
-        "build": "tsc",
-        "start": "node dist/index.js",
+        "build": "rollup -c",
+        "start": "node dist/bundle.js",
         "dev": "tsx src/index.ts",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
@@ -15,17 +15,23 @@
     },
     "dependencies": {
         "@octokit/rest": "^21.0.0",
-        "simple-git": "^3.22.0",
-        "proper-lockfile": "^4.1.2"
+        "proper-lockfile": "^4.1.2",
+        "simple-git": "^3.22.0"
     },
     "devDependencies": {
         "@eslint/js": "^9.0.0",
+        "@rollup/plugin-commonjs": "^28.0.0",
+        "@rollup/plugin-json": "^6.0.0",
+        "@rollup/plugin-node-resolve": "^15.0.0",
+        "@rollup/plugin-typescript": "^12.0.0",
         "@types/node": "^20.10.0",
         "@types/proper-lockfile": "^4.1.4",
         "eslint": "^9.0.0",
         "eslint-config-prettier": "^9.0.0",
         "globals": "^15.0.0",
         "prettier": "^3.0.0",
+        "rollup": "^4.0.0",
+        "tslib": "^2.8.1",
         "tsx": "^4.7.0",
         "typescript": "^5.3.0",
         "typescript-eslint": "^8.0.0"
