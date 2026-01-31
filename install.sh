@@ -3,7 +3,7 @@
 # SyncReeper Installation Script
 #
 # This script installs all prerequisites and sets up SyncReeper.
-# Run with: curl -fsSL https://raw.githubusercontent.com/yourusername/SyncReeper/main/install.sh | bash
+# Run with: curl -fsSL https://raw.githubusercontent.com/NateAGeek/SyncReeper/main/install.sh | bash
 # Or locally: ./install.sh
 #
 
@@ -27,8 +27,9 @@ NODE_VERSION="20"
 # Source NVM if available
 load_nvm() {
     export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-    [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+    # Use || true to prevent set -e from exiting if NVM files don't exist
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" || true
+    [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion" || true
 }
 load_nvm
 
@@ -90,15 +91,15 @@ get_node_version() {
 # Install NVM and Node.js
 install_nvm() {
     info "Installing NVM ${NVM_VERSION} and Node.js ${NODE_VERSION}..."
-    
+
     case $OS in
         debian|fedora|arch|macos|linux)
             # Install NVM
             curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" | bash
-            
+
             # Load NVM for current session
             load_nvm
-            
+
             # Install Node.js
             info "Installing Node.js ${NODE_VERSION} via NVM..."
             nvm install "${NODE_VERSION}"
@@ -119,30 +120,30 @@ install_nvm() {
             error "Unsupported OS. Please install NVM manually from https://github.com/nvm-sh/nvm"
             ;;
     esac
-    
+
     success "Node.js $(node --version) installed via NVM"
 }
 
 # Install Pulumi
 install_pulumi() {
     info "Installing Pulumi CLI..."
-    
+
     if [[ "$OS" == "windows" ]]; then
         warn "On Windows, install Pulumi using:"
         warn "  choco install pulumi"
         warn "Or download from https://www.pulumi.com/docs/get-started/install/"
         exit 1
     fi
-    
+
     curl -fsSL https://get.pulumi.com | sh
-    
+
     # Add to PATH for current session
     export PATH="$HOME/.pulumi/bin:$PATH"
-    
+
     # Also add to shell profile for future sessions
     SHELL_NAME=$(basename "$SHELL")
     PROFILE_FILE=""
-    
+
     case $SHELL_NAME in
         bash)
             if [[ -f "$HOME/.bashrc" ]]; then
@@ -158,7 +159,7 @@ install_pulumi() {
             PROFILE_FILE="$HOME/.config/fish/config.fish"
             ;;
     esac
-    
+
     if [[ -n "$PROFILE_FILE" ]] && [[ -f "$PROFILE_FILE" ]]; then
         if ! grep -q '.pulumi/bin' "$PROFILE_FILE" 2>/dev/null; then
             echo '' >> "$PROFILE_FILE"
@@ -167,14 +168,14 @@ install_pulumi() {
             info "Added Pulumi to PATH in $PROFILE_FILE"
         fi
     fi
-    
+
     success "Pulumi $(pulumi version) installed"
 }
 
 # Install Git
 install_git() {
     info "Installing Git..."
-    
+
     case $OS in
         debian)
             sudo apt-get update
@@ -194,7 +195,7 @@ install_git() {
             error "Please install Git manually."
             ;;
     esac
-    
+
     success "Git $(git --version | cut -d' ' -f3) installed"
 }
 
@@ -205,23 +206,23 @@ main() {
     echo "       SyncReeper Installation Script     "
     echo "=========================================="
     echo ""
-    
+
     # Detect OS
     OS=$(detect_os)
     info "Detected OS: $OS"
-    
+
     # Check and install prerequisites
     echo ""
     info "Checking prerequisites..."
     echo ""
-    
+
     # Check Git
     if command_exists git; then
         success "Git is installed ($(git --version | cut -d' ' -f3))"
     else
         install_git
     fi
-    
+
     # Check Node.js (via NVM)
     load_nvm
     NODE_VERSION_INSTALLED=$(get_node_version)
@@ -233,7 +234,7 @@ main() {
         fi
         install_nvm
     fi
-    
+
     # Check npm (NVM provides npm with Node.js)
     load_nvm
     if command_exists npm; then
@@ -241,14 +242,14 @@ main() {
     else
         error "npm not found. Please reinstall Node.js via NVM: nvm install ${NODE_VERSION}"
     fi
-    
+
     # Check Pulumi
     if command_exists pulumi; then
         success "Pulumi is installed ($(pulumi version))"
     else
         install_pulumi
     fi
-    
+
     # Ensure Pulumi is in PATH
     if ! command_exists pulumi; then
         export PATH="$HOME/.pulumi/bin:$PATH"
@@ -256,34 +257,34 @@ main() {
             error "Pulumi installation failed. Please install manually from https://www.pulumi.com/docs/get-started/install/"
         fi
     fi
-    
+
     echo ""
     info "All prerequisites installed!"
     echo ""
-    
+
     # Install npm dependencies
     echo "=========================================="
     echo "       Installing Dependencies            "
     echo "=========================================="
     echo ""
-    
+
     info "Installing main project dependencies..."
     npm install
     success "Main dependencies installed"
-    
+
     info "Installing sync application dependencies..."
     cd sync
     npm install
     cd ..
     success "Sync dependencies installed"
-    
+
     echo ""
     info "Building project..."
     info "  - Building Pulumi infrastructure code..."
     info "  - Bundling sync application with Rollup..."
     npm run build:all
     success "Project built successfully"
-    
+
     # Verify the sync bundle was created
     if [ -f "sync/dist/bundle.js" ]; then
         BUNDLE_SIZE=$(du -h sync/dist/bundle.js | cut -f1)
@@ -291,19 +292,19 @@ main() {
     else
         error "Sync app bundle not found at sync/dist/bundle.js"
     fi
-    
+
     echo ""
     info "Running lint and format checks..."
     npm run check
     success "All checks passed"
-    
+
     # Setup Pulumi
     echo ""
     echo "=========================================="
     echo "       Pulumi Setup                       "
     echo "=========================================="
     echo ""
-    
+
     # Check if already logged in
     if pulumi whoami &> /dev/null; then
         PULUMI_USER=$(pulumi whoami)
@@ -315,25 +316,25 @@ main() {
         pulumi login --local
         success "Pulumi configured with local backend"
     fi
-    
+
     # Check for existing configuration
     echo ""
     echo "=========================================="
     echo "       SyncReeper Configuration           "
     echo "=========================================="
     echo ""
-    
+
     EXISTING_CONFIG=false
     SKIP_SETUP=false
-    
+
     # Check if a stack exists and has configuration
     if pulumi stack --show-name &> /dev/null; then
         STACK_NAME=$(pulumi stack --show-name 2>/dev/null)
-        
+
         # Check for key configuration values
         GITHUB_USER=$(pulumi config get syncreeper:github-username 2>/dev/null || echo "")
         GITHUB_TOKEN=$(pulumi config get syncreeper:github-token 2>/dev/null || echo "")
-        
+
         if [[ -n "$GITHUB_USER" ]] && [[ -n "$GITHUB_TOKEN" ]]; then
             EXISTING_CONFIG=true
             success "Found existing configuration in stack: $STACK_NAME"
@@ -341,17 +342,17 @@ main() {
             info "Current configuration:"
             echo "  GitHub Username:     $GITHUB_USER"
             echo "  GitHub Token:        [secret]"
-            
+
             # Show other config values if they exist
             REPOS_PATH=$(pulumi config get syncreeper:repos-path 2>/dev/null || echo "/srv/repos")
             SYNC_SCHEDULE=$(pulumi config get syncreeper:sync-schedule 2>/dev/null || echo "daily")
             FOLDER_ID=$(pulumi config get syncreeper:syncthing-folder-id 2>/dev/null || echo "repos")
-            
+
             echo "  Repos Path:          $REPOS_PATH"
             echo "  Sync Schedule:       $SYNC_SCHEDULE"
             echo "  Syncthing Folder ID: $FOLDER_ID"
             echo ""
-            
+
             # Ask user what to do
             echo "What would you like to do?"
             echo ""
@@ -361,7 +362,7 @@ main() {
             echo ""
             read -p "Enter choice [1-3] (default: 1): " CONFIG_CHOICE
             CONFIG_CHOICE=${CONFIG_CHOICE:-1}
-            
+
             case $CONFIG_CHOICE in
                 1)
                     SKIP_SETUP=true
@@ -386,14 +387,14 @@ main() {
             esac
         fi
     fi
-    
+
     # Run setup if needed
     if [[ "$SKIP_SETUP" == "false" ]]; then
         info "Starting interactive setup..."
         echo ""
         npm run setup
     fi
-    
+
     # Done
     echo ""
     echo "=========================================="
