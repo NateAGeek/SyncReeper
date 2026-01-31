@@ -16,8 +16,6 @@ export interface GitHubConfig {
  * Syncthing configuration
  */
 export interface SyncthingConfig {
-    /** API key for Syncthing REST API */
-    apiKey: string;
     /** List of trusted device IDs that can connect */
     trustedDevices: string[];
     /** Folder ID for the shared repos folder (must match on all devices) */

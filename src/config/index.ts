@@ -26,10 +26,9 @@ export function getConfig(): SyncReeperConfig {
     } as unknown as GitHubConfig;
 
     const syncthing: SyncthingConfig = {
-        apiKey: config.requireSecret("syncthing-api-key").apply((k) => k),
         trustedDevices: config.requireObject<string[]>("syncthing-trusted-devices"),
         folderId: config.get("syncthing-folder-id") ?? DEFAULT_CONFIG.syncthingFolderId,
-    } as unknown as SyncthingConfig;
+    };
 
     const ssh: SSHConfig = {
         authorizedKeys: config.requireObject<string[]>("ssh-authorized-keys"),
