@@ -89,7 +89,6 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=${reposPath}
-ReadWritePaths=${PATHS.logDir}
 PrivateTmp=yes
 
 [Install]

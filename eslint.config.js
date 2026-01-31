@@ -6,7 +6,14 @@ import globals from "globals";
 export default tseslint.config(
     // Global ignores
     {
-        ignores: ["dist/**", "sync/dist/**", "node_modules/**", "sync/node_modules/**"],
+        ignores: [
+            "dist/**",
+            "sync/dist/**",
+            "node_modules/**",
+            "sync/node_modules/**",
+            "test-repos/**",
+            "sync/test-repos/**",
+        ],
     },
 
     // Base ESLint recommended rules
