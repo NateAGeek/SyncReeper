@@ -25,12 +25,6 @@ export function generateStignoreContent(): string {
 // - Use #include <file> to include patterns from another file
 
 // ============================================================
-// Include each repository's .gitignore
-// This respects project-specific ignore rules
-// ============================================================
-#include .gitignore
-
-// ============================================================
 // OS-Specific Files
 // ============================================================
 

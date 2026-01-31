@@ -28,8 +28,7 @@
     "license": "MIT",
     "dependencies": {
         "@pulumi/command": "^1.0.0",
-        "@pulumi/pulumi": "^3.0.0",
-        "xmlbuilder2": "^3.0.0"
+        "@pulumi/pulumi": "^3.0.0"
     },
     "devDependencies": {
         "@eslint/js": "^9.0.0",

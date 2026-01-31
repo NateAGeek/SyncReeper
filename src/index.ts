@@ -15,7 +15,6 @@
  * Run with: pulumi up
  */
 
-import * as pulumi from "@pulumi/pulumi";
 import { getConfig } from "./config/index.js";
 
 // Resources
@@ -104,14 +103,46 @@ export const outputs = {
     serviceUser: serviceUser.username,
     reposPath: directories.reposPath,
 
-    // Instructions
-    accessSyncthingGui: pulumi.interpolate`SSH tunnel: ssh -L 8384:localhost:8384 your-vps && open http://localhost:8384`,
-    getDeviceId: "Run: syncreeper-device-id",
-    manualSync: "Run: sync-repos",
-    viewLogs: "Run: journalctl -u syncreeper-sync -f",
+    // Post-deployment instructions
+    postDeploymentInstructions: `
+================================================================================
+DEPLOYMENT COMPLETE - Next Steps:
+================================================================================
 
-    // Status commands
-    checkFirewall: "Run: sudo ufw status",
-    checkSyncthing: pulumi.interpolate`Run: systemctl status syncthing@${serviceUser.username}`,
-    checkSyncTimer: "Run: systemctl list-timers syncreeper-sync.timer",
+1. TRIGGER INITIAL SYNC (required):
+   The GitHub sync timer runs daily. To sync repositories immediately:
+   
+   sudo systemctl start syncreeper-sync.service
+   
+   Monitor progress with:
+   journalctl -u syncreeper-sync -f
+
+2. GET SYNCTHING DEVICE ID:
+   Run this on your VPS to get the device ID for pairing:
+   
+   syncreeper-device-id
+
+3. ACCESS SYNCTHING GUI:
+   Create an SSH tunnel and open the web interface:
+   
+   ssh -L 8384:localhost:8384 user@your-vps
+   Then open: http://localhost:8384
+
+4. ADD VPS TO OTHER DEVICES:
+   - Open Syncthing on your other devices
+   - Add the VPS device using its device ID
+   - Share the "repos" folder with it
+
+================================================================================
+`,
+
+    // Quick reference commands
+    commands: {
+        triggerSync: "sudo systemctl start syncreeper-sync.service",
+        viewSyncLogs: "journalctl -u syncreeper-sync -f",
+        getDeviceId: "syncreeper-device-id",
+        checkFirewall: "sudo ufw status",
+        checkSyncthing: `systemctl status syncthing@${serviceUser.username}`,
+        checkSyncTimer: "systemctl list-timers syncreeper-sync.timer",
+    },
 };
