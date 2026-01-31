@@ -57,7 +57,7 @@ REPOS_PATH=${config.sync.reposPath}
 /**
  * Generates the systemd service unit file
  */
-function generateServiceUnit(): string {
+function generateServiceUnit(reposPath: string): string {
     const { name: username } = SERVICE_USER;
 
     return `[Unit]
@@ -88,7 +88,8 @@ SyslogIdentifier=syncreeper-sync
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=${PATHS.syncApp}/../..
+ReadWritePaths=${reposPath}
+ReadWritePaths=${PATHS.logDir}
 PrivateTmp=yes
 
 [Install]
@@ -220,7 +221,7 @@ export function setupGitHubSync(options: SetupGitHubSyncOptions): SetupGitHubSyn
     resources.push(verifySyncBundle);
 
     // Write systemd service unit
-    const serviceUnit = generateServiceUnit();
+    const serviceUnit = generateServiceUnit(config.sync.reposPath);
     const writeServiceUnit = writeFile({
         name: "syncreeper-sync-service",
         path: "/etc/systemd/system/syncreeper-sync.service",

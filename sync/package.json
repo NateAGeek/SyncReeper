@@ -7,7 +7,9 @@
     "scripts": {
         "build": "rollup -c",
         "start": "node dist/bundle.js",
+        "start:local": "node --env-file=.env.local dist/bundle.js",
         "dev": "tsx src/index.ts",
+        "dev:local": "node --env-file=.env.local --import tsx src/index.ts",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",
