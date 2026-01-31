@@ -8,15 +8,15 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as pulumi from "@pulumi/pulumi";
-import { runCommand, writeFile, enableService } from "../../lib/command.js";
+import { runCommand, writeFile, copyFile, enableService } from "../../lib/command.js";
 import { PATHS, SERVICE_USER } from "../../config/types.js";
 import type { SyncReeperConfig } from "../../config/types.js";
 
 /**
- * Gets the sync app bundle content
+ * Gets the sync app bundle path
  * Throws an error if the bundle doesn't exist, prompting user to build first
  */
-function getSyncAppBundle(): string {
+function getSyncAppBundlePath(): string {
     const bundlePath = path.join(process.cwd(), "sync", "dist", "bundle.js");
 
     if (!fs.existsSync(bundlePath)) {
@@ -26,7 +26,7 @@ function getSyncAppBundle(): string {
         );
     }
 
-    return fs.readFileSync(bundlePath, "utf-8");
+    return bundlePath;
 }
 
 export interface SetupGitHubSyncOptions {
@@ -183,8 +183,8 @@ export function setupGitHubSync(options: SetupGitHubSyncOptions): SetupGitHubSyn
     });
     resources.push(writeEnvFile);
 
-    // Get the bundled sync application
-    const bundleContent = getSyncAppBundle();
+    // Get the bundled sync application path
+    const bundlePath = getSyncAppBundlePath();
 
     // Create sync app directory
     const createSyncAppDir = runCommand({
@@ -199,11 +199,11 @@ export function setupGitHubSync(options: SetupGitHubSyncOptions): SetupGitHubSyn
     });
     resources.push(createSyncAppDir);
 
-    // Deploy the bundled sync application
-    const deploySyncBundle = writeFile({
+    // Deploy the bundled sync application using cp (avoids argument length limits)
+    const deploySyncBundle = copyFile({
         name: "deploy-sync-bundle",
-        path: `${PATHS.syncApp}/dist/bundle.js`,
-        content: bundleContent,
+        src: bundlePath,
+        dest: `${PATHS.syncApp}/dist/bundle.js`,
         mode: "644",
         owner: username,
         group: username,

@@ -63,6 +63,9 @@ export interface WriteFileOptions {
 /**
  * Writes a file to the filesystem using a command
  * Handles content escaping and permissions
+ *
+ * NOTE: For large files (>100KB), use copyFile instead to avoid
+ * "argument list too long" errors.
  */
 export function writeFile(options: WriteFileOptions): command.local.Command {
     const {
@@ -83,6 +86,44 @@ chmod ${mode} ${path}
 chown ${owner}:${group} ${path}`;
 
     const deleteCmd = `rm -f ${path}`;
+
+    return new command.local.Command(
+        name,
+        {
+            create: createCmd,
+            delete: deleteCmd,
+            update: createCmd,
+        },
+        { dependsOn }
+    );
+}
+
+export interface CopyFileOptions {
+    /** Unique resource name */
+    name: string;
+    /** Absolute path to the source file (local) */
+    src: string;
+    /** Absolute path to the destination file */
+    dest: string;
+    /** File permissions (octal, e.g., "644") */
+    mode?: string;
+    /** File owner (e.g., "root" or "syncreeper") */
+    owner?: string;
+    /** File group (e.g., "root" or "syncreeper") */
+    group?: string;
+    /** Resources this depends on */
+    dependsOn?: pulumi.Resource[];
+}
+
+/**
+ * Copies a file from source to destination
+ * Use this for large files to avoid "argument list too long" errors
+ */
+export function copyFile(options: CopyFileOptions): command.local.Command {
+    const { name, src, dest, mode = "644", owner = "root", group = "root", dependsOn } = options;
+
+    const createCmd = `cp "${src}" "${dest}" && chmod ${mode} "${dest}" && chown ${owner}:${group} "${dest}"`;
+    const deleteCmd = `rm -f "${dest}"`;
 
     return new command.local.Command(
         name,
