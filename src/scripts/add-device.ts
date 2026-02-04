@@ -16,8 +16,17 @@
  *   npm run add-device -- --local                         # Local, prompts for device info
  *   npm run add-device -- --local --device-id "ABC..."    # Local, partial args
  *   npm run add-device -- --local --device-id "ABC..." --name "Laptop" --folder repos  # Fully scripted
+ *
+ * Local Mode Access (Linux):
+ *   - As syncreeper user: runs directly
+ *   - As root: uses sudo -u syncreeper
+ *   - As other user: requires membership in 'syncreeper' group
+ *
+ * Local Mode Access (macOS):
+ *   - Runs directly as current user
  */
 
+import * as os from "node:os";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { input } from "@inquirer/prompts";
@@ -26,6 +35,9 @@ import { execa } from "execa";
 // Device ID format: 8 groups of 7 alphanumeric chars separated by dashes
 const DEVICE_ID_REGEX =
     /^[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}$/;
+
+// Syncthing config path on Linux (for group-based access)
+const LINUX_SYNCTHING_CONFIG = "/home/syncreeper/.config/syncthing";
 
 interface Args {
     local: boolean;
@@ -74,6 +86,36 @@ function validateDeviceId(value: string): boolean | string {
         return "Invalid device ID format (expected: XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX)";
     }
     return true;
+}
+
+/**
+ * Get the appropriate syncthing CLI command prefix based on platform and user
+ *
+ * - macOS: run directly (no prefix needed)
+ * - Linux as syncreeper: run directly
+ * - Linux as root: use sudo -u syncreeper
+ * - Linux as other user: run with explicit --config flag (requires group membership)
+ */
+function getSyncthingCliCommand(subCommand: string): string {
+    const platform = process.platform;
+    const username = os.userInfo().username;
+
+    if (platform === "darwin") {
+        // macOS: always run directly
+        return `syncthing cli ${subCommand}`;
+    }
+
+    // Linux
+    if (username === "syncreeper") {
+        // Running as syncreeper user - run directly
+        return `syncthing cli ${subCommand}`;
+    } else if (username === "root") {
+        // Running as root - use sudo to run as syncreeper
+        return `sudo -u syncreeper syncthing cli ${subCommand}`;
+    } else {
+        // Other user - use explicit config path (requires group membership)
+        return `syncthing cli --config=${LINUX_SYNCTHING_CONFIG} ${subCommand}`;
+    }
 }
 
 async function main(): Promise<void> {
@@ -131,23 +173,27 @@ async function main(): Promise<void> {
             default: "repos",
         }));
 
-    const username = "syncreeper";
-
-    // Commands to run
-    const commands = [
-        `echo "Adding device: ${deviceName} (${normalizedDeviceId})..."`,
-        `sudo -u ${username} syncthing cli config devices add --device-id "${normalizedDeviceId}" --name "${deviceName}" 2>/dev/null || echo "Device may already exist"`,
-        `echo "Sharing folder '${folderId}' with device..."`,
-        `sudo -u ${username} syncthing cli config folders "${folderId}" devices add --device-id "${normalizedDeviceId}" 2>/dev/null || echo "Device may already be shared"`,
-        `echo ""`,
-        `echo "Done! Device added successfully."`,
-        `echo "The remote device must also add this VPS to complete the connection."`,
-        `echo "Run 'syncreeper-device-id' to get this VPS's device ID."`,
-    ].join(" && ");
-
     if (args.local) {
-        // Local execution
+        // Local execution - build platform-aware commands
         console.log("Running locally...\n");
+
+        const addDeviceCmd = getSyncthingCliCommand(
+            `config devices add --device-id "${normalizedDeviceId}" --name "${deviceName}"`
+        );
+        const shareFolderCmd = getSyncthingCliCommand(
+            `config folders "${folderId}" devices add --device-id "${normalizedDeviceId}"`
+        );
+
+        const commands = [
+            `echo "Adding device: ${deviceName} (${normalizedDeviceId})..."`,
+            `${addDeviceCmd} 2>/dev/null || echo "Device may already exist"`,
+            `echo "Sharing folder '${folderId}' with device..."`,
+            `${shareFolderCmd} 2>/dev/null || echo "Device may already be shared"`,
+            `echo ""`,
+            `echo "Done! Device added successfully."`,
+            `echo "The remote device must also add this VPS to complete the connection."`,
+            `echo "Run 'syncreeper-device-id' to get this VPS's device ID."`,
+        ].join(" && ");
 
         try {
             const result = await execa("bash", ["-c", commands], {
@@ -155,15 +201,36 @@ async function main(): Promise<void> {
             });
             process.exit(result.exitCode ?? 0);
         } catch {
+            const platform = process.platform;
             console.error("\nFailed to add device. Make sure:");
             console.error("  1. SyncReeper has been deployed (pulumi up)");
             console.error("  2. Syncthing is running");
-            console.error("  3. You have sudo access");
+            if (platform === "linux") {
+                const username = os.userInfo().username;
+                if (username !== "syncreeper" && username !== "root") {
+                    console.error("  3. You are in the 'syncreeper' group (run: groups)");
+                    console.error(
+                        "     Or run as: sudo -u syncreeper npm run add-device -- --local"
+                    );
+                }
+            }
             process.exit(1);
         }
     } else {
         // Remote execution via SSH
+        // When SSH'ing as syncreeper, run syncthing cli directly
         console.log(`\nConnecting to ${user}@${host}...\n`);
+
+        const commands = [
+            `echo "Adding device: ${deviceName} (${normalizedDeviceId})..."`,
+            `syncthing cli config devices add --device-id "${normalizedDeviceId}" --name "${deviceName}" 2>/dev/null || echo "Device may already exist"`,
+            `echo "Sharing folder '${folderId}' with device..."`,
+            `syncthing cli config folders "${folderId}" devices add --device-id "${normalizedDeviceId}" 2>/dev/null || echo "Device may already be shared"`,
+            `echo ""`,
+            `echo "Done! Device added successfully."`,
+            `echo "The remote device must also add this VPS to complete the connection."`,
+            `echo "Run 'syncreeper-device-id' to get this VPS's device ID."`,
+        ].join(" && ");
 
         try {
             const result = await execa("ssh", [`${user}@${host}`, commands], {

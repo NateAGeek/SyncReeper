@@ -172,6 +172,24 @@ install_pulumi() {
     success "Pulumi $(pulumi version) installed"
 }
 
+# Install Homebrew (macOS)
+install_homebrew() {
+    info "Installing Homebrew..."
+
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+    # Add Homebrew to PATH for current session
+    if [[ -f "/opt/homebrew/bin/brew" ]]; then
+        # Apple Silicon
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [[ -f "/usr/local/bin/brew" ]]; then
+        # Intel Mac
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+
+    success "Homebrew $(brew --version | head -1) installed"
+}
+
 # Install Git
 install_git() {
     info "Installing Git..."
@@ -215,6 +233,15 @@ main() {
     echo ""
     info "Checking prerequisites..."
     echo ""
+
+    # macOS-specific: Check Homebrew first
+    if [[ "$OS" == "macos" ]]; then
+        if command_exists brew; then
+            success "Homebrew is installed ($(brew --version | head -1 | cut -d' ' -f2))"
+        else
+            install_homebrew
+        fi
+    fi
 
     # Check Git
     if command_exists git; then
@@ -408,13 +435,26 @@ main() {
     echo "  1. Review your configuration:"
     echo "     ${BLUE}pulumi config${NC}"
     echo ""
-    echo "  2. SSH into your VPS and deploy:"
-    echo "     ${BLUE}pulumi up${NC}"
+
+    if [[ "$OS" == "macos" ]]; then
+        echo "  2. Deploy SyncReeper locally on this Mac:"
+        echo "     ${BLUE}pulumi up${NC}"
+        echo ""
+        echo "  3. Get your Mac's Syncthing device ID:"
+        echo "     ${BLUE}~/.local/bin/syncreeper-device-id${NC}"
+        echo ""
+        echo "  4. Access Syncthing GUI at:"
+        echo "     ${BLUE}http://localhost:8384${NC}"
+    else
+        echo "  2. SSH into your VPS and deploy:"
+        echo "     ${BLUE}pulumi up${NC}"
+        echo ""
+        echo "  3. Get your VPS Syncthing device ID:"
+        echo "     ${BLUE}npm run get-device-id${NC}"
+    fi
+
     echo ""
-    echo "  3. Get your VPS Syncthing device ID:"
-    echo "     ${BLUE}npm run get-device-id${NC}"
-    echo ""
-    echo "  4. Add the device ID to Syncthing on your other machines"
+    echo "  Add the device ID to Syncthing on your other machines"
     echo ""
     echo "For more information, see README.md"
     echo ""

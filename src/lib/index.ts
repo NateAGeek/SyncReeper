@@ -2,4 +2,4 @@
  * Lib module exports
  */
 
-export * from "./command.js";
+export * from "./command";

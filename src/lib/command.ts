@@ -1,10 +1,18 @@
 /**
  * Command execution utilities for Pulumi
  * Wraps @pulumi/command for consistent usage across services
+ *
+ * This module provides cross-platform abstractions for:
+ * - Running arbitrary commands
+ * - Writing files with proper permissions
+ * - Enabling system services (systemd on Linux, launchd on macOS)
  */
 
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
+import { isLinux, isMacOS } from "./platform";
+import { enableServiceLinux } from "./command.linux";
+import { enableServiceDarwin } from "./command.darwin";
 
 export interface RunCommandOptions {
     /** Unique resource name */
@@ -24,7 +32,7 @@ export interface RunCommandOptions {
 }
 
 /**
- * Runs a local command on the VPS
+ * Runs a local command
  * Uses @pulumi/command local.Command
  */
 export function runCommand(options: RunCommandOptions): command.local.Command {
@@ -52,9 +60,9 @@ export interface WriteFileOptions {
     content: string | pulumi.Output<string>;
     /** File permissions (octal, e.g., "644") */
     mode?: string;
-    /** File owner (e.g., "root" or "syncreeper") */
+    /** File owner (e.g., "root" or "syncreeper") - Linux only */
     owner?: string;
-    /** File group (e.g., "root" or "syncreeper") */
+    /** File group (e.g., "root" or "syncreeper") - Linux only */
     group?: string;
     /** Resources this depends on */
     dependsOn?: pulumi.Resource[];
@@ -63,6 +71,9 @@ export interface WriteFileOptions {
 /**
  * Writes a file to the filesystem using a command
  * Handles content escaping and permissions
+ *
+ * On macOS, owner/group are ignored (uses current user).
+ * On Linux, uses chown to set ownership.
  *
  * NOTE: For large files (>100KB), use copyFile instead to avoid
  * "argument list too long" errors.
@@ -78,12 +89,22 @@ export function writeFile(options: WriteFileOptions): command.local.Command {
         dependsOn,
     } = options;
 
-    // Use pulumi.interpolate to handle Output<string> content
-    const createCmd = pulumi.interpolate`cat > ${path} << 'SYNCREEPER_EOF'
+    let createCmd: pulumi.Output<string>;
+
+    if (isMacOS()) {
+        // macOS: don't use chown (current user owns files)
+        createCmd = pulumi.interpolate`cat > ${path} << 'SYNCREEPER_EOF'
+${content}
+SYNCREEPER_EOF
+chmod ${mode} ${path}`;
+    } else {
+        // Linux: use chown for proper ownership
+        createCmd = pulumi.interpolate`cat > ${path} << 'SYNCREEPER_EOF'
 ${content}
 SYNCREEPER_EOF
 chmod ${mode} ${path}
 chown ${owner}:${group} ${path}`;
+    }
 
     const deleteCmd = `rm -f ${path}`;
 
@@ -107,9 +128,9 @@ export interface CopyFileOptions {
     dest: string;
     /** File permissions (octal, e.g., "644") */
     mode?: string;
-    /** File owner (e.g., "root" or "syncreeper") */
+    /** File owner (e.g., "root" or "syncreeper") - Linux only */
     owner?: string;
-    /** File group (e.g., "root" or "syncreeper") */
+    /** File group (e.g., "root" or "syncreeper") - Linux only */
     group?: string;
     /** Resources this depends on */
     dependsOn?: pulumi.Resource[];
@@ -122,7 +143,14 @@ export interface CopyFileOptions {
 export function copyFile(options: CopyFileOptions): command.local.Command {
     const { name, src, dest, mode = "644", owner = "root", group = "root", dependsOn } = options;
 
-    const createCmd = `cp "${src}" "${dest}" && chmod ${mode} "${dest}" && chown ${owner}:${group} "${dest}"`;
+    let createCmd: string;
+    if (isMacOS()) {
+        // macOS: don't use chown
+        createCmd = `cp "${src}" "${dest}" && chmod ${mode} "${dest}"`;
+    } else {
+        // Linux: use chown for proper ownership
+        createCmd = `cp "${src}" "${dest}" && chmod ${mode} "${dest}" && chown ${owner}:${group} "${dest}"`;
+    }
     const deleteCmd = `rm -f "${dest}"`;
 
     return new command.local.Command(
@@ -139,7 +167,7 @@ export function copyFile(options: CopyFileOptions): command.local.Command {
 export interface EnableServiceOptions {
     /** Unique resource name */
     name: string;
-    /** Service name (without .service) */
+    /** Service name (without .service on Linux, plist name on macOS) */
     service: string;
     /** Whether to start the service immediately */
     start?: boolean;
@@ -150,29 +178,26 @@ export interface EnableServiceOptions {
 }
 
 /**
- * Enables and optionally starts a systemd service
+ * Enables and optionally starts a system service
+ *
+ * Platform behavior:
+ * - Linux: Uses systemctl to manage systemd services
+ * - macOS: Uses launchctl to manage LaunchAgents
+ *
+ * Note: For Homebrew-installed services on macOS, use enableBrewService() instead.
  */
 export function enableService(options: EnableServiceOptions): command.local.Command {
-    const { name, service, start = true, enable = true, dependsOn } = options;
-
-    const commands: string[] = [];
-    commands.push("systemctl daemon-reload");
-    if (enable) {
-        commands.push(`systemctl enable ${service}`);
+    if (isMacOS()) {
+        return enableServiceDarwin(options);
     }
-    if (start) {
-        commands.push(`systemctl start ${service}`);
+    if (isLinux()) {
+        return enableServiceLinux(options);
     }
-
-    const createCmd = commands.join(" && ");
-    const deleteCmd = `systemctl stop ${service} || true; systemctl disable ${service} || true`;
-
-    return new command.local.Command(
-        name,
-        {
-            create: createCmd,
-            delete: deleteCmd,
-        },
-        { dependsOn }
-    );
+    throw new Error(`Unsupported platform: ${process.platform}`);
 }
+
+// Re-export platform-specific functions for direct use when needed
+export { enableServiceLinux } from "./command.linux";
+export { enableServiceDarwin, enableBrewService } from "./command.darwin";
+export type { EnableServiceLinuxOptions } from "./command.linux";
+export type { EnableServiceDarwinOptions, EnableBrewServiceOptions } from "./command.darwin";

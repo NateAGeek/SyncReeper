@@ -2,7 +2,6 @@
     "name": "syncreeper",
     "version": "1.0.0",
     "description": "Pulumi project to sync GitHub repos across devices via Syncthing on a secured VPS",
-    "type": "module",
     "main": "dist/index.js",
     "scripts": {
         "build": "tsc",

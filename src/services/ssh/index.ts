@@ -12,8 +12,8 @@
  */
 
 import type * as pulumi from "@pulumi/pulumi";
-import { runCommand, writeFile, enableService } from "../../lib/command.js";
-import { SERVICE_USER } from "../../config/types.js";
+import { runCommand, writeFile } from "../../lib/command";
+import { SERVICE_USER } from "../../config/types";
 
 export interface SetupSSHOptions {
     /** List of authorized SSH public keys for the syncreeper user */

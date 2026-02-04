@@ -1,54 +1,18 @@
 /**
- * Firewall rule definitions for UFW
- * SyncReeper only exposes SSH (port 22) - everything else is blocked
- * Syncthing is accessed via SSH tunnel, not directly exposed
- */
-
-/**
- * Defines a UFW firewall rule
- */
-export interface FirewallRule {
-    /** Rule description for documentation */
-    description: string;
-    /** Port number or range (e.g., "22", "8000:8100") */
-    port?: string;
-    /** Protocol: tcp, udp, or both */
-    proto?: "tcp" | "udp" | "any";
-    /** Action: allow or deny */
-    action: "allow" | "deny";
-    /** Direction: in or out */
-    direction: "in" | "out";
-    /** Optional: limit connections (for rate limiting) */
-    limit?: boolean;
-    /** Optional: from address/network (e.g., "any", "192.168.1.0/24") */
-    from?: string;
-}
-
-/**
- * Default firewall rules for SyncReeper
+ * Linux firewall service - UFW implementation
  *
- * Security model:
- * - Default deny incoming
- * - Allow outgoing (for apt, git, syncthing relay)
- * - Only SSH (22) is exposed, with rate limiting
- * - Syncthing GUI/API accessed via SSH tunnel
- * - Syncthing sync uses relay servers (outbound connections only)
+ * Configures UFW (Uncomplicated Firewall) on Linux.
  */
-export const DEFAULT_FIREWALL_RULES: FirewallRule[] = [
-    {
-        description: "Allow SSH with rate limiting (6 connections per 30 seconds)",
-        port: "22",
-        proto: "tcp",
-        action: "allow",
-        direction: "in",
-        limit: true,
-    },
-];
+
+import type * as pulumi from "@pulumi/pulumi";
+import { runCommand } from "../../lib/command";
+import type { FirewallRule, SetupFirewallOptions, SetupFirewallResult } from "./types";
+import { DEFAULT_FIREWALL_RULES } from "./types";
 
 /**
  * UFW default policies
  */
-export const UFW_POLICIES = {
+const UFW_POLICIES = {
     /** Deny all incoming connections by default */
     incoming: "deny",
     /** Allow all outgoing connections (needed for apt, git, syncthing relay) */
@@ -60,7 +24,7 @@ export const UFW_POLICIES = {
 /**
  * Generates UFW command for a single rule
  */
-export function generateRuleCommand(rule: FirewallRule): string {
+function generateRuleCommand(rule: FirewallRule): string {
     const parts: string[] = ["ufw"];
 
     // Add limit if specified (only works with allow)
@@ -95,7 +59,7 @@ export function generateRuleCommand(rule: FirewallRule): string {
 /**
  * Generates all UFW commands to configure the firewall
  */
-export function generateFirewallCommands(rules: FirewallRule[] = DEFAULT_FIREWALL_RULES): string[] {
+function generateFirewallCommands(rules: FirewallRule[]): string[] {
     const commands: string[] = [];
 
     // Reset UFW to clean state (non-interactive)
@@ -114,4 +78,43 @@ export function generateFirewallCommands(rules: FirewallRule[] = DEFAULT_FIREWAL
     commands.push("echo 'y' | ufw enable");
 
     return commands;
+}
+
+/**
+ * Sets up UFW firewall on Linux
+ *
+ * - Configures default deny incoming, allow outgoing
+ * - Adds SSH rule with rate limiting
+ */
+export function setupFirewallLinux(options: SetupFirewallOptions = {}): SetupFirewallResult {
+    const { rules = DEFAULT_FIREWALL_RULES, dependsOn = [] } = options;
+    const resources: pulumi.Resource[] = [];
+
+    // Generate all firewall commands
+    const firewallCommands = generateFirewallCommands(rules);
+
+    // Configure UFW with all rules
+    const configureUfw = runCommand({
+        name: "configure-ufw",
+        create: firewallCommands.join(" && "),
+        delete: `
+            ufw disable || true
+            echo "UFW disabled"
+        `.trim(),
+        dependsOn,
+    });
+    resources.push(configureUfw);
+
+    // Verify UFW status
+    const verifyUfw = runCommand({
+        name: "verify-ufw",
+        create: `
+            ufw status verbose
+            echo "Firewall configured successfully"
+        `.trim(),
+        dependsOn: [configureUfw],
+    });
+    resources.push(verifyUfw);
+
+    return { resources };
 }

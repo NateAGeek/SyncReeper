@@ -3,8 +3,8 @@
  */
 
 import type * as pulumi from "@pulumi/pulumi";
-import { runCommand } from "../lib/command.js";
-import { SERVICE_USER, PATHS } from "../config/types.js";
+import { runCommand } from "../lib/command";
+import { SERVICE_USER, PATHS } from "../config/types";
 
 export interface CreateDirectoriesOptions {
     /** Path where repos will be stored */

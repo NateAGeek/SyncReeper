@@ -11,7 +11,7 @@ import {
     type SSHConfig,
     type SyncConfig,
     DEFAULT_CONFIG,
-} from "./types.js";
+} from "./types";
 
 /**
  * Loads and validates the complete SyncReeper configuration
@@ -42,4 +42,4 @@ export function getConfig(): SyncReeperConfig {
     return { github, syncthing, ssh, sync };
 }
 
-export * from "./types.js";
+export * from "./types";
