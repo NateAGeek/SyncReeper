@@ -9,6 +9,7 @@
  *   --device-id   Syncthing device ID to add
  *   --name        Friendly name for the device (default: "remote-device")
  *   --folder      Folder ID to share (default: "repos")
+ *   --user        Service username (default: reads from Pulumi config or "syncreeper")
  *   --help        Show help
  *
  * Examples:
@@ -16,11 +17,12 @@
  *   npm run add-device -- --local                         # Local, prompts for device info
  *   npm run add-device -- --local --device-id "ABC..."    # Local, partial args
  *   npm run add-device -- --local --device-id "ABC..." --name "Laptop" --folder repos  # Fully scripted
+ *   npm run add-device -- --user myuser                   # Use custom service username
  *
  * Local Mode Access (Linux):
- *   - As syncreeper user: runs directly
- *   - As root: uses sudo -u syncreeper
- *   - As other user: requires membership in 'syncreeper' group
+ *   - As the service user: runs directly
+ *   - As root: uses sudo -u <service-user>
+ *   - As other user: requires membership in service user's group
  *
  * Local Mode Access (macOS):
  *   - Runs directly as current user
@@ -31,19 +33,39 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { input } from "@inquirer/prompts";
 import { execa } from "execa";
+import { DEFAULT_SERVICE_USER_LINUX } from "../config/paths.linux";
 
 // Device ID format: 8 groups of 7 alphanumeric chars separated by dashes
 const DEVICE_ID_REGEX =
     /^[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}-[A-Z0-9]{7}$/;
 
-// Syncthing config path on Linux (for group-based access)
-const LINUX_SYNCTHING_CONFIG = "/home/syncreeper/.config/syncthing";
+/**
+ * Get the default service username from Pulumi config, falling back to platform defaults
+ */
+async function getDefaultServiceUser(): Promise<string> {
+    try {
+        const result = await execa("pulumi", ["config", "get", "syncreeper:service-user"], {
+            reject: false,
+        });
+        if (result.exitCode === 0 && result.stdout.trim()) {
+            return result.stdout.trim();
+        }
+    } catch {
+        // Ignore errors - fall through to defaults
+    }
+
+    if (process.platform === "darwin") {
+        return os.userInfo().username;
+    }
+    return DEFAULT_SERVICE_USER_LINUX;
+}
 
 interface Args {
     local: boolean;
     deviceId?: string;
     name?: string;
     folder?: string;
+    user?: string;
 }
 
 async function parseArgs(): Promise<Args> {
@@ -65,6 +87,10 @@ async function parseArgs(): Promise<Args> {
             type: "string",
             description: "Folder ID to share with the device",
         })
+        .option("user", {
+            type: "string",
+            description: "Service username (default: from Pulumi config or 'syncreeper')",
+        })
         .help()
         .alias("help", "h")
         .example("$0", "Interactive mode - prompts for all values")
@@ -77,6 +103,7 @@ async function parseArgs(): Promise<Args> {
         deviceId: argv.deviceId,
         name: argv.name,
         folder: argv.folder,
+        user: argv.user,
     };
 }
 
@@ -92,11 +119,11 @@ function validateDeviceId(value: string): boolean | string {
  * Get the appropriate syncthing CLI command prefix based on platform and user
  *
  * - macOS: run directly (no prefix needed)
- * - Linux as syncreeper: run directly
- * - Linux as root: use sudo -u syncreeper
+ * - Linux as the service user: run directly
+ * - Linux as root: use sudo -u <service-user>
  * - Linux as other user: run with explicit --config flag (requires group membership)
  */
-function getSyncthingCliCommand(subCommand: string): string {
+function getSyncthingCliCommand(subCommand: string, serviceUser: string): string {
     const platform = process.platform;
     const username = os.userInfo().username;
 
@@ -106,20 +133,22 @@ function getSyncthingCliCommand(subCommand: string): string {
     }
 
     // Linux
-    if (username === "syncreeper") {
-        // Running as syncreeper user - run directly
+    if (username === serviceUser) {
+        // Running as service user - run directly
         return `syncthing cli ${subCommand}`;
     } else if (username === "root") {
-        // Running as root - use sudo to run as syncreeper
-        return `sudo -u syncreeper syncthing cli ${subCommand}`;
+        // Running as root - use sudo to run as service user
+        return `sudo -u ${serviceUser} syncthing cli ${subCommand}`;
     } else {
         // Other user - use explicit config path (requires group membership)
-        return `syncthing cli --config=${LINUX_SYNCTHING_CONFIG} ${subCommand}`;
+        const syncthingConfig = `/home/${serviceUser}/.config/syncthing`;
+        return `syncthing cli --config=${syncthingConfig} ${subCommand}`;
     }
 }
 
 async function main(): Promise<void> {
     const args = await parseArgs();
+    const serviceUser = args.user ?? (await getDefaultServiceUser());
 
     console.log("\nAdd Device to Syncthing\n");
 
@@ -135,7 +164,7 @@ async function main(): Promise<void> {
 
         user = await input({
             message: "SSH username:",
-            default: "syncreeper",
+            default: serviceUser,
         });
     }
 
@@ -178,10 +207,12 @@ async function main(): Promise<void> {
         console.log("Running locally...\n");
 
         const addDeviceCmd = getSyncthingCliCommand(
-            `config devices add --device-id "${normalizedDeviceId}" --name "${deviceName}"`
+            `config devices add --device-id "${normalizedDeviceId}" --name "${deviceName}"`,
+            serviceUser
         );
         const shareFolderCmd = getSyncthingCliCommand(
-            `config folders "${folderId}" devices add --device-id "${normalizedDeviceId}"`
+            `config folders "${folderId}" devices add --device-id "${normalizedDeviceId}"`,
+            serviceUser
         );
 
         const commands = [
@@ -207,10 +238,10 @@ async function main(): Promise<void> {
             console.error("  2. Syncthing is running");
             if (platform === "linux") {
                 const username = os.userInfo().username;
-                if (username !== "syncreeper" && username !== "root") {
-                    console.error("  3. You are in the 'syncreeper' group (run: groups)");
+                if (username !== serviceUser && username !== "root") {
+                    console.error(`  3. You are in the '${serviceUser}' group (run: groups)`);
                     console.error(
-                        "     Or run as: sudo -u syncreeper npm run add-device -- --local"
+                        `     Or run as: sudo -u ${serviceUser} npm run add-device -- --local`
                     );
                 }
             }
@@ -218,7 +249,7 @@ async function main(): Promise<void> {
         }
     } else {
         // Remote execution via SSH
-        // When SSH'ing as syncreeper, run syncthing cli directly
+        // When SSH'ing as the service user, run syncthing cli directly
         console.log(`\nConnecting to ${user}@${host}...\n`);
 
         const commands = [

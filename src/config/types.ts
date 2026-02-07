@@ -3,10 +3,18 @@
  *
  * Platform-aware configuration that provides the correct paths and settings
  * for both Linux VPS and macOS local deployments.
+ *
+ * Supports a configurable service username via `syncreeper:service-user` Pulumi config.
+ * When not set, defaults to "syncreeper" on Linux and the current user on macOS.
  */
 
 import { isLinux, isMacOS } from "../lib/platform";
-import { SERVICE_USER_LINUX, PATHS_LINUX, DEFAULT_CONFIG_LINUX } from "./paths.linux";
+import {
+    getServiceUserLinux,
+    getPathsLinux,
+    getDefaultConfigLinux,
+    DEFAULT_SERVICE_USER_LINUX,
+} from "./paths.linux";
 import { getServiceUserDarwin, getPathsDarwin, getDefaultConfigDarwin } from "./paths.darwin";
 
 /**
@@ -55,6 +63,8 @@ export interface SyncReeperConfig {
     syncthing: SyncthingConfig;
     ssh: SSHConfig;
     sync: SyncConfig;
+    /** The configured service username */
+    serviceUser: string;
 }
 
 /**
@@ -75,6 +85,8 @@ export interface PathsConfig {
     syncthingConfig: string;
     logDir: string;
     envDir: string;
+    /** User systemd directory (Linux only, empty string on macOS) */
+    userSystemd: string;
     launchAgents: string;
 }
 
@@ -87,47 +99,93 @@ export interface DefaultConfig {
     syncthingFolderId: string;
 }
 
+// ============================================================================
+// Module-level configured username
+// ============================================================================
+
 /**
- * Gets the service user configuration for the current platform
+ * The configured service username, set by the config loader.
+ * When undefined, platform defaults are used.
  */
-export function getServiceUser(): ServiceUserConfig {
+let _configuredUsername: string | undefined;
+
+/**
+ * Sets the configured service username.
+ * Called by the config loader after reading from Pulumi config.
+ */
+export function setConfiguredUsername(username: string | undefined): void {
+    _configuredUsername = username;
+}
+
+/**
+ * Gets the configured service username, or undefined if not set.
+ */
+export function getConfiguredUsername(): string | undefined {
+    return _configuredUsername;
+}
+
+// ============================================================================
+// Platform-aware getters (use configured username when available)
+// ============================================================================
+
+/**
+ * Gets the service user configuration for the current platform.
+ * Uses the configured username if set, otherwise platform defaults.
+ *
+ * @param username - Optional override. If not provided, uses the configured username.
+ */
+export function getServiceUser(username?: string): ServiceUserConfig {
+    const effectiveUsername = username ?? _configuredUsername;
+
     if (isMacOS()) {
-        return getServiceUserDarwin();
+        return getServiceUserDarwin(effectiveUsername);
     }
     if (isLinux()) {
-        return { ...SERVICE_USER_LINUX };
+        return getServiceUserLinux(effectiveUsername);
     }
     throw new Error(`Unsupported platform: ${process.platform}`);
 }
 
 /**
- * Gets the application paths for the current platform
+ * Gets the application paths for the current platform.
+ * Uses the configured username if set, otherwise platform defaults.
+ *
+ * @param username - Optional override. If not provided, uses the configured username.
  */
-export function getPaths(): PathsConfig {
+export function getPaths(username?: string): PathsConfig {
+    const effectiveUsername = username ?? _configuredUsername;
+
     if (isMacOS()) {
-        return getPathsDarwin();
+        return getPathsDarwin(effectiveUsername);
     }
     if (isLinux()) {
-        return { ...PATHS_LINUX };
+        return getPathsLinux(effectiveUsername);
     }
     throw new Error(`Unsupported platform: ${process.platform}`);
 }
 
 /**
- * Gets the default configuration for the current platform
+ * Gets the default configuration for the current platform.
+ * Uses the configured username if set, otherwise platform defaults.
+ *
+ * @param username - Optional override. If not provided, uses the configured username.
  */
-export function getDefaultConfig(): DefaultConfig {
+export function getDefaultConfig(username?: string): DefaultConfig {
+    const effectiveUsername = username ?? _configuredUsername;
+
     if (isMacOS()) {
-        return getDefaultConfigDarwin();
+        return getDefaultConfigDarwin(effectiveUsername);
     }
     if (isLinux()) {
-        return { ...DEFAULT_CONFIG_LINUX };
+        return getDefaultConfigLinux();
     }
     throw new Error(`Unsupported platform: ${process.platform}`);
 }
 
+// ============================================================================
 // Legacy exports for backwards compatibility
-// These will use the current platform's values
+// These will use the configured username (or platform defaults)
+// ============================================================================
 
 /**
  * @deprecated Use getDefaultConfig() instead for platform-aware defaults
@@ -174,5 +232,8 @@ export const PATHS = {
     },
     get logDir() {
         return getPaths().logDir;
+    },
+    get userSystemd() {
+        return getPaths().userSystemd;
     },
 } as const;

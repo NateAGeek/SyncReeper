@@ -2,11 +2,12 @@
  * Linux user resource
  *
  * Creates a dedicated system user for running SyncReeper services on Linux.
+ * The username is configurable via the `syncreeper:service-user` Pulumi config key.
  */
 
 import type * as pulumi from "@pulumi/pulumi";
 import { runCommand } from "../lib/command";
-import { SERVICE_USER_LINUX } from "../config/paths.linux";
+import { getServiceUser } from "../config/types";
 
 export interface CreateServiceUserLinuxResult {
     /** The command resource that created the user */
@@ -18,13 +19,15 @@ export interface CreateServiceUserLinuxResult {
 }
 
 /**
- * Creates a dedicated system user for running SyncReeper services on Linux
+ * Creates a dedicated system user for running SyncReeper services on Linux.
+ * If the user already exists, this is a no-op.
+ *
  * - Syncthing runs as this user
  * - GitHub sync runs as this user
  * - Owns /srv/repos directory
  */
 export function createServiceUserLinux(): CreateServiceUserLinuxResult {
-    const { name, home, shell } = SERVICE_USER_LINUX;
+    const { name, home, shell } = getServiceUser();
 
     const createUserCmd = runCommand({
         name: "create-service-user",

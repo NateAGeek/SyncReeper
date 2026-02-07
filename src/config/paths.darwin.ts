@@ -6,29 +6,36 @@
  * - ~/Library/Logs for logs
  * - ~/Library/LaunchAgents for user launch agents
  * - Home directory for repos
+ *
+ * Supports an optional username override. When provided, paths are derived
+ * from that user's home directory (/Users/{username}) instead of the current user.
  */
 
 import * as os from "node:os";
 import * as path from "node:path";
 
 /**
- * Get the current user's home directory
+ * Get the home directory for a given user, or the current user if not specified
  */
-function getHomeDir(): string {
-    return os.homedir();
+function getHomeDirForUser(username?: string): string {
+    if (!username || username === os.userInfo().username) {
+        return os.homedir();
+    }
+    // On macOS, user home directories are under /Users/{username}
+    return `/Users/${username}`;
 }
 
 /**
  * Service user configuration for macOS
- * Uses the current user (no dedicated system user needed)
+ * Uses the specified user or falls back to the current user
  */
-export function getServiceUserDarwin() {
-    const username = os.userInfo().username;
-    const home = getHomeDir();
+export function getServiceUserDarwin(username?: string) {
+    const name = username ?? os.userInfo().username;
+    const home = getHomeDirForUser(username);
 
     return {
-        name: username,
-        home: home,
+        name,
+        home,
         shell: "/bin/zsh",
     } as const;
 }
@@ -37,8 +44,8 @@ export function getServiceUserDarwin() {
  * Application paths for macOS
  * These are computed at runtime since they depend on the user's home directory
  */
-export function getPathsDarwin() {
-    const home = getHomeDir();
+export function getPathsDarwin(username?: string) {
+    const home = getHomeDirForUser(username);
     const appSupport = path.join(home, "Library", "Application Support");
 
     return {
@@ -52,6 +59,8 @@ export function getPathsDarwin() {
         logDir: path.join(home, "Library", "Logs", "SyncReeper"),
         /** Environment/secrets directory */
         envDir: path.join(appSupport, "SyncReeper", "config"),
+        /** User systemd directory (not used on macOS) */
+        userSystemd: "",
         /** LaunchAgents directory for launchd plists */
         launchAgents: path.join(home, "Library", "LaunchAgents"),
     } as const;
@@ -60,8 +69,8 @@ export function getPathsDarwin() {
 /**
  * Default configuration values for macOS
  */
-export function getDefaultConfigDarwin() {
-    const home = getHomeDir();
+export function getDefaultConfigDarwin(username?: string) {
+    const home = getHomeDirForUser(username);
 
     return {
         /** Default sync schedule */

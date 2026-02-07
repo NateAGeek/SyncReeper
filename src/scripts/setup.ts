@@ -6,8 +6,10 @@
  * Run with: npm run setup
  */
 
+import * as os from "node:os";
 import { input, password, confirm } from "@inquirer/prompts";
 import { execa } from "execa";
+import { DEFAULT_SERVICE_USER_LINUX } from "../config/paths.linux";
 
 async function runPulumiConfig(key: string, value: string, secret = false): Promise<void> {
     const args = ["config", "set", `syncreeper:${key}`, value];
@@ -31,6 +33,16 @@ async function checkPulumiStack(): Promise<boolean> {
     }
 }
 
+/**
+ * Get the default service username for the current platform
+ */
+function getDefaultServiceUser(): string {
+    if (process.platform === "darwin") {
+        return os.userInfo().username;
+    }
+    return DEFAULT_SERVICE_USER_LINUX;
+}
+
 async function main(): Promise<void> {
     console.log("\n🔧 SyncReeper Setup\n");
     console.log("This script will configure the required settings for SyncReeper.");
@@ -50,8 +62,28 @@ async function main(): Promise<void> {
         console.log();
     }
 
+    // Service User Configuration
+    console.log("👤 Service User Configuration\n");
+
+    const defaultUser = getDefaultServiceUser();
+    const platformNote =
+        process.platform === "darwin"
+            ? "(macOS: must be an existing user)"
+            : "(Linux: will be created if it doesn't exist)";
+
+    const serviceUser = await input({
+        message: `Service username ${platformNote}:`,
+        default: defaultUser,
+        validate: (v) => {
+            if (v.length === 0) return "Username is required";
+            if (!/^[a-z_][a-z0-9_-]*$/.test(v))
+                return "Username must start with a letter or underscore and contain only lowercase letters, digits, hyphens, or underscores";
+            return true;
+        },
+    });
+
     // GitHub Configuration
-    console.log("📦 GitHub Configuration\n");
+    console.log("\n📦 GitHub Configuration\n");
 
     const githubUsername = await input({
         message: "GitHub username:",
@@ -102,14 +134,16 @@ async function main(): Promise<void> {
     // Optional Configuration
     console.log("\n⚙️  Optional Configuration\n");
 
+    const defaultReposPath =
+        process.platform === "darwin" ? `${os.homedir()}/SyncReeper/repos` : "/srv/repos";
+
     const useDefaults = await confirm({
-        message:
-            "Use default settings for sync schedule (daily at 3 AM), repos path (/srv/repos), and folder ID (repos)?",
+        message: `Use default settings for sync schedule (daily at 3 AM), repos path (${defaultReposPath}), and folder ID (repos)?`,
         default: true,
     });
 
     let syncSchedule = "daily";
-    let reposPath = "/srv/repos";
+    let reposPath = defaultReposPath;
     let syncthingFolderId = "repos";
 
     if (!useDefaults) {
@@ -120,7 +154,7 @@ async function main(): Promise<void> {
 
         reposPath = await input({
             message: "Repository storage path:",
-            default: "/srv/repos",
+            default: defaultReposPath,
         });
 
         syncthingFolderId = await input({
@@ -133,6 +167,7 @@ async function main(): Promise<void> {
 
     // Confirm and save
     console.log("\n📋 Configuration Summary\n");
+    console.log(`  Service User:       ${serviceUser}`);
     console.log(`  GitHub Username:    ${githubUsername}`);
     console.log(`  GitHub Token:       ${"*".repeat(10)}...`);
     console.log(`  Syncthing API Key:  ${"*".repeat(10)}...`);
@@ -158,6 +193,7 @@ async function main(): Promise<void> {
     // Save configuration
     console.log("\n💾 Saving configuration...\n");
 
+    await runPulumiConfig("service-user", serviceUser);
     await runPulumiConfig("github-username", githubUsername);
     await runPulumiConfig("github-token", githubToken, true);
     await runPulumiConfig("syncthing-api-key", syncthingApiKey, true);

@@ -2,10 +2,11 @@
  * Service user resource
  *
  * Creates/identifies the user account for running SyncReeper services.
+ * The username is configurable via the `syncreeper:service-user` Pulumi config key.
  *
  * Platform behavior:
- * - Linux: Creates a dedicated 'syncreeper' system user
- * - macOS: Uses the current user (no dedicated user needed)
+ * - Linux: Creates a dedicated system user (if it doesn't exist)
+ * - macOS: Validates that the specified user exists (no user creation)
  */
 
 import type * as pulumi from "@pulumi/pulumi";
@@ -25,8 +26,8 @@ export interface CreateServiceUserResult {
 /**
  * Creates/identifies the service user for the current platform
  *
- * - On Linux: Creates a dedicated 'syncreeper' system user
- * - On macOS: Uses the current logged-in user (no-op)
+ * - On Linux: Creates a dedicated system user (configured or default 'syncreeper')
+ * - On macOS: Validates the configured (or current) user exists
  */
 export function createServiceUser(): CreateServiceUserResult {
     if (isMacOS()) {

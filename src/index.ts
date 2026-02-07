@@ -51,7 +51,12 @@ logPlatformBanner();
 // Ensure we're on a supported platform
 assertSupportedPlatform();
 
-// Get platform-aware configuration
+// Load configuration from Pulumi config
+// This must happen before getServiceUser()/getPaths() so the configured
+// service-user is available for path resolution
+const config = getConfig();
+
+// Get platform-aware configuration (now uses the configured service-user)
 const platformName = getPlatformDisplayName();
 const serviceUserConfig = getServiceUser();
 const pathsConfig = getPaths();
@@ -61,14 +66,11 @@ console.log(`Home directory: ${serviceUserConfig.home}`);
 console.log(`Repos path: ${getDefaultConfig().reposPath}`);
 console.log("");
 
-// Load configuration from Pulumi config
-const config = getConfig();
-
 // ============================================================================
 // Phase 1: System Setup
 // ============================================================================
 
-// Create the service user (syncreeper on Linux, current user on macOS)
+// Create the service user (create on Linux, validate on macOS)
 const serviceUser = createServiceUser();
 
 // Create required directories
@@ -101,6 +103,8 @@ if (isLinux()) {
         authorizedKeys: config.ssh.authorizedKeys,
         dependsOn: [serviceUser.resource, ...packages.resources],
     });
+} else {
+    console.log("SSH is currently managed by host, please review.");
 }
 
 // Setup SSHGuard for brute-force protection
@@ -136,6 +140,8 @@ const _syncthing = setupSyncthing({
 
 // Generate platform-specific post-deployment instructions
 function getPostDeploymentInstructions(): string {
+    const username = serviceUser.username;
+
     if (isLinux()) {
         return `
 ================================================================================
@@ -145,8 +151,8 @@ DEPLOYMENT COMPLETE - Linux VPS - Next Steps:
 IMPORTANT: SSH ACCESS HAS BEEN HARDENED
 - Password authentication is DISABLED
 - Root login is DISABLED  
-- Only the 'syncreeper' user can SSH in
-- Connect with: ssh syncreeper@your-vps
+- Only the '${username}' user can SSH in
+- Connect with: ssh ${username}@your-vps
 
 1. TRIGGER INITIAL SYNC (required):
    The GitHub sync timer runs daily. To sync repositories immediately:
@@ -164,7 +170,7 @@ IMPORTANT: SSH ACCESS HAS BEEN HARDENED
 3. ACCESS SYNCTHING GUI:
    Create an SSH tunnel and open the web interface:
    
-   ssh -L 8384:localhost:8384 syncreeper@your-vps
+   ssh -L 8384:localhost:8384 ${username}@your-vps
    Then open: http://localhost:8384
 
 4. ADD VPS TO OTHER DEVICES:
@@ -210,6 +216,8 @@ DEPLOYMENT COMPLETE - macOS - Next Steps:
 
 // Generate platform-specific commands
 function getCommands(): Record<string, string> {
+    const username = serviceUser.username;
+
     if (isLinux()) {
         return {
             triggerSync: "sudo systemctl start syncreeper-sync.service",
@@ -217,7 +225,7 @@ function getCommands(): Record<string, string> {
             getDeviceId: "syncreeper-device-id",
             checkFirewall: "sudo ufw status",
             checkSSH: "sudo sshd -T | grep -E 'passwordauthentication|permitrootlogin|allowusers'",
-            checkSyncthing: `systemctl status syncthing@${serviceUser.username}`,
+            checkSyncthing: `systemctl status syncthing@${username}`,
             checkSyncTimer: "systemctl list-timers syncreeper-sync.timer",
         };
     }

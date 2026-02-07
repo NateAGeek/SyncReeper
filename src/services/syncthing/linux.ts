@@ -2,12 +2,12 @@
  * Linux Syncthing Service
  *
  * Configures Syncthing to sync repositories across devices on Linux.
- * Syncthing runs as the syncreeper user via systemd.
+ * Syncthing runs as the configured service user via systemd.
  */
 
 import type * as pulumi from "@pulumi/pulumi";
 import { runCommand, writeFile, enableService } from "../../lib/command";
-import { PATHS_LINUX, SERVICE_USER_LINUX } from "../../config/paths.linux";
+import { getServiceUser, getPaths } from "../../config/types";
 import { generateStignoreContent } from "./stignore";
 import type { SetupSyncthingOptions, SetupSyncthingResult } from "./types";
 
@@ -78,13 +78,13 @@ echo "Syncthing CLI configuration complete!"
  * Sets up Syncthing on Linux
  * - Generates keys and initial config
  * - Configures devices/folders via CLI
- * - Runs as syncreeper user
+ * - Runs as the configured service user
  */
 export function setupSyncthingLinux(options: SetupSyncthingOptions): SetupSyncthingResult {
     const { config, dependsOn = [] } = options;
     const resources: pulumi.Resource[] = [];
-    const { name: username } = SERVICE_USER_LINUX;
-    const { syncthingConfig } = PATHS_LINUX;
+    const { name: username } = getServiceUser();
+    const { syncthingConfig } = getPaths();
 
     // Stop Syncthing if running (clean slate for configuration)
     const stopSyncthing = runCommand({
@@ -193,10 +193,9 @@ export function setupSyncthingLinux(options: SetupSyncthingOptions): SetupSyncth
     resources.push(restartSyncthing);
 
     // Create convenience script to get device ID
-    // Works for any user in the 'syncreeper' group
     const getDeviceIdScript = `#!/bin/bash
 # Get the Syncthing device ID for this VPS
-# Works for any user in the 'syncreeper' group
+# Works for any user in the '${username}' group
 
 set -e
 
@@ -206,8 +205,8 @@ CONFIG_DIR="${syncthingConfig}"
 if [ ! -r "$CONFIG_DIR/cert.pem" ]; then
     echo "Error: Cannot read Syncthing config at $CONFIG_DIR"
     echo ""
-    echo "To fix, add yourself to the syncreeper group:"
-    echo "  sudo usermod -aG syncreeper \\$(whoami)"
+    echo "To fix, add yourself to the ${username} group:"
+    echo "  sudo usermod -aG ${username} \\$(whoami)"
     echo "  # Then log out and back in"
     exit 1
 fi

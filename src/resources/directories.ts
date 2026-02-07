@@ -4,7 +4,7 @@
 
 import type * as pulumi from "@pulumi/pulumi";
 import { runCommand } from "../lib/command";
-import { SERVICE_USER, PATHS } from "../config/types";
+import { getPaths, getServiceUser } from "../config/types";
 
 export interface CreateDirectoriesOptions {
     /** Path where repos will be stored */
@@ -24,11 +24,10 @@ export interface CreateDirectoriesResult {
  * Creates all required directories for SyncReeper
  * - /srv/repos - Where GitHub repos are cloned
  * - /opt/syncreeper/sync - Where the sync application is deployed
- * - /var/log/syncreeper - Log directory (though we use journald)
  */
 export function createDirectories(options: CreateDirectoriesOptions): CreateDirectoriesResult {
     const { reposPath, dependsOn } = options;
-    const { name: username } = SERVICE_USER;
+    const { name: username } = getServiceUser();
 
     const createDirsCmd = runCommand({
         name: "create-directories",
@@ -39,19 +38,19 @@ export function createDirectories(options: CreateDirectoriesOptions): CreateDire
             chmod 755 "${reposPath}"
 
             # Create sync app directory
-            mkdir -p "${PATHS.syncApp}"
-            chown root:root "${PATHS.syncApp}"
-            chmod 755 "${PATHS.syncApp}"
+            mkdir -p "${getPaths().syncApp}"
+            chown root:root "${getPaths().syncApp}"
+            chmod 755 "${getPaths().syncApp}"
 
             # Create syncthing config directory
-            mkdir -p "${PATHS.syncthingConfig}"
-            chown ${username}:${username} "${PATHS.syncthingConfig}"
-            chmod 700 "${PATHS.syncthingConfig}"
+            mkdir -p "${getPaths().syncthingConfig}"
+            chown ${username}:${username} "${getPaths().syncthingConfig}"
+            chmod 700 "${getPaths().syncthingConfig}"
 
             echo "Directories created successfully"
         `.trim(),
         delete: `
-            rm -rf "${PATHS.syncApp}"
+            rm -rf "${getPaths().syncApp}"
             # Don't delete repos or syncthing config on destroy - data preservation
             echo "Application directories removed (repos preserved)"
         `.trim(),

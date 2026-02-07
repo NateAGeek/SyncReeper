@@ -5,7 +5,7 @@
  * for periodic repository synchronization.
  *
  * Uses user-level systemd services (systemctl --user) which allows
- * the syncreeper user to manage the service without root privileges.
+ * the service user to manage the service without root privileges.
  */
 
 import * as fs from "node:fs";
@@ -13,7 +13,7 @@ import * as path from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import { runCommand, writeFile, copyFile } from "../../lib/command";
 import { enableUserServiceLinux } from "../../lib/command.linux";
-import { PATHS_LINUX, SERVICE_USER_LINUX } from "../../config/paths.linux";
+import { getServiceUser, getPaths } from "../../config/types";
 import type { SetupGitHubSyncOptions, SetupGitHubSyncResult } from "./types";
 import type { SyncReeperConfig } from "../../config/types";
 
@@ -52,7 +52,7 @@ REPOS_PATH=${config.sync.reposPath}
  * Note: No User/Group for user services - they run as the owning user
  */
 function generateServiceUnit(reposPath: string): string {
-    const { syncApp, envDir } = PATHS_LINUX;
+    const { syncApp, envDir } = getPaths();
 
     return `[Unit]
 Description=SyncReeper GitHub Repository Sync
@@ -118,26 +118,26 @@ WantedBy=timers.target
 
 /**
  * Generates a convenience script for manual sync
- * Must be run as the syncreeper user
+ * Must be run as the configured service user
  */
-function generateSyncScript(): string {
+function generateSyncScript(username: string): string {
     return `#!/bin/bash
 # Manual trigger for SyncReeper sync
-# Must be run as the syncreeper user
+# Must be run as the '${username}' user
 
 set -e
 
 CURRENT_USER=$(whoami)
 
-if [ "$CURRENT_USER" != "syncreeper" ]; then
-    echo "Error: This script must be run as the 'syncreeper' user."
+if [ "$CURRENT_USER" != "${username}" ]; then
+    echo "Error: This script must be run as the '${username}' user."
     echo ""
     echo "Options:"
-    echo "  1. Run as syncreeper:"
-    echo "     sudo -u syncreeper sync-repos"
+    echo "  1. Run as ${username}:"
+    echo "     sudo -u ${username} sync-repos"
     echo ""
     echo "  2. Via SSH (from your workstation):"
-    echo "     ssh syncreeper@your-vps sync-repos"
+    echo "     ssh ${username}@your-vps sync-repos"
     exit 1
 fi
 
@@ -158,8 +158,8 @@ echo "  journalctl --user -u syncreeper-sync -f"
 export function setupGitHubSyncLinux(options: SetupGitHubSyncOptions): SetupGitHubSyncResult {
     const { config, dependsOn = [] } = options;
     const resources: pulumi.Resource[] = [];
-    const { name: username, home: userHome } = SERVICE_USER_LINUX;
-    const { syncApp, syncScript, userSystemd } = PATHS_LINUX;
+    const { name: username, home: userHome } = getServiceUser();
+    const { syncApp, syncScript, userSystemd } = getPaths();
 
     // Step 1: Migrate old system-level service to user-level (if it exists)
     const migrateOldService = runCommand({
@@ -314,7 +314,7 @@ export function setupGitHubSyncLinux(options: SetupGitHubSyncOptions): SetupGitH
     resources.push(writeTimerUnit);
 
     // Step 13: Write convenience script
-    const syncScriptContent = generateSyncScript();
+    const syncScriptContent = generateSyncScript(username);
     const writeSyncScript = writeFile({
         name: "sync-repos-script",
         path: syncScript,

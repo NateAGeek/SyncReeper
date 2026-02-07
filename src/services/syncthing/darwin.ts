@@ -8,7 +8,7 @@
 import type * as pulumi from "@pulumi/pulumi";
 import { runCommand, writeFile } from "../../lib/command";
 import { enableBrewService } from "../../lib/command.darwin";
-import { getPathsDarwin } from "../../config/paths.darwin";
+import { getPaths } from "../../config/types";
 import { generateStignoreContent } from "./stignore";
 import type { SetupSyncthingOptions, SetupSyncthingResult } from "./types";
 
@@ -87,7 +87,7 @@ export function setupSyncthingDarwin(options: SetupSyncthingOptions): SetupSynct
     const { config, dependsOn = [] } = options;
     const resources: pulumi.Resource[] = [];
 
-    const paths = getPathsDarwin();
+    const paths = getPaths();
 
     // Stop Syncthing if running (clean slate for configuration)
     const stopSyncthing = runCommand({

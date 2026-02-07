@@ -13,7 +13,7 @@
 
 import type * as pulumi from "@pulumi/pulumi";
 import { runCommand, writeFile } from "../../lib/command";
-import { SERVICE_USER } from "../../config/types";
+import { getServiceUser } from "../../config/types";
 
 export interface SetupSSHOptions {
     /** List of authorized SSH public keys for the syncreeper user */
@@ -40,7 +40,7 @@ const SSHD_HARDENING_CONFIG = {
     maxAuthTries: 3,
 
     // User restrictions
-    allowUsers: SERVICE_USER.name,
+    allowUsers: getServiceUser().name,
 
     // Session security
     clientAliveInterval: 300,
@@ -153,9 +153,9 @@ export function setupSSH(options: SetupSSHOptions): SetupSSHResult {
     const createSSHDir = runCommand({
         name: "ssh-dir-syncreeper",
         create: `
-            mkdir -p ${SERVICE_USER.home}/.ssh
-            chmod 700 ${SERVICE_USER.home}/.ssh
-            chown ${SERVICE_USER.name}:${SERVICE_USER.name} ${SERVICE_USER.home}/.ssh
+            mkdir -p ${getServiceUser().home}/.ssh
+            chmod 700 ${getServiceUser().home}/.ssh
+            chown ${getServiceUser().name}:${getServiceUser().name} ${getServiceUser().home}/.ssh
         `.trim(),
         dependsOn,
     });
@@ -165,11 +165,11 @@ export function setupSSH(options: SetupSSHOptions): SetupSSHResult {
     const authorizedKeysContent = generateAuthorizedKeys(authorizedKeys);
     const authorizedKeysFile = writeFile({
         name: "ssh-authorized-keys-syncreeper",
-        path: `${SERVICE_USER.home}/.ssh/authorized_keys`,
+        path: `${getServiceUser().home}/.ssh/authorized_keys`,
         content: authorizedKeysContent,
         mode: "600",
-        owner: SERVICE_USER.name,
-        group: SERVICE_USER.name,
+        owner: getServiceUser().name,
+        group: getServiceUser().name,
         dependsOn: [createSSHDir],
     });
     resources.push(authorizedKeysFile);
@@ -205,7 +205,7 @@ export function setupSSH(options: SetupSSHOptions): SetupSSHResult {
             echo "SSH hardening applied successfully"
             echo "  - Password authentication: disabled"
             echo "  - Root login: disabled"
-            echo "  - Allowed users: ${SERVICE_USER.name}"
+            echo "  - Allowed users: ${getServiceUser().name}"
             echo "  - Authorized keys: ${authorizedKeys.length} key(s) deployed"
         `.trim(),
         dependsOn: [restartSSHD],

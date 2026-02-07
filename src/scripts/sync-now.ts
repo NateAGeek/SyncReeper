@@ -8,17 +8,19 @@
  *   --local      Run locally on the VPS instead of via SSH
  *   --follow     Follow sync logs after starting
  *   --no-follow  Don't follow sync logs
+ *   --user       Service username (default: reads from Pulumi config or "syncreeper")
  *   --help       Show help
  *
  * Examples:
  *   npm run sync-now                        # Interactive, connects via SSH
  *   npm run sync-now -- --local             # Local, prompts for follow logs
  *   npm run sync-now -- --local --follow    # Local, follow logs (no prompts)
- *   npm run sync-now -- --local --no-follow # Local, don't follow logs (no prompts)
+ *   npm run sync-now -- --local --no-follow # Local, don't follow logs
+ *   npm run sync-now -- --user myuser       # Use custom service username
  *
  * Local Mode (Linux):
- *   - Must be run as the 'syncreeper' user (uses user-level systemctl --user)
- *   - Or run via: sudo -u syncreeper npm run sync-now -- --local
+ *   - Must be run as the service user (uses user-level systemctl --user)
+ *   - Or run via: sudo -u <service-user> npm run sync-now -- --local
  *
  * Local Mode (macOS):
  *   - Runs directly as current user via sync-repos script
@@ -29,10 +31,33 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { input, confirm } from "@inquirer/prompts";
 import { execa } from "execa";
+import { DEFAULT_SERVICE_USER_LINUX } from "../config/paths.linux";
+
+/**
+ * Get the default service username from Pulumi config, falling back to platform defaults
+ */
+async function getDefaultServiceUser(): Promise<string> {
+    try {
+        const result = await execa("pulumi", ["config", "get", "syncreeper:service-user"], {
+            reject: false,
+        });
+        if (result.exitCode === 0 && result.stdout.trim()) {
+            return result.stdout.trim();
+        }
+    } catch {
+        // Ignore errors - fall through to defaults
+    }
+
+    if (process.platform === "darwin") {
+        return os.userInfo().username;
+    }
+    return DEFAULT_SERVICE_USER_LINUX;
+}
 
 interface Args {
     local: boolean;
     follow?: boolean;
+    user?: string;
 }
 
 async function parseArgs(): Promise<Args> {
@@ -46,6 +71,10 @@ async function parseArgs(): Promise<Args> {
             type: "boolean",
             description: "Follow sync logs after starting (use --no-follow to disable)",
         })
+        .option("user", {
+            type: "string",
+            description: "Service username (default: from Pulumi config or 'syncreeper')",
+        })
         .help()
         .alias("help", "h")
         .example("$0", "Interactive mode - prompts for VPS connection details")
@@ -57,13 +86,14 @@ async function parseArgs(): Promise<Args> {
     return {
         local: argv.local,
         follow: argv.follow,
+        user: argv.user,
     };
 }
 
 /**
  * Run sync locally with platform-aware commands
  */
-async function runLocalSync(followLogs: boolean): Promise<void> {
+async function runLocalSync(followLogs: boolean, serviceUser: string): Promise<void> {
     const platform = process.platform;
     const username = os.userInfo().username;
 
@@ -87,20 +117,20 @@ async function runLocalSync(followLogs: boolean): Promise<void> {
             process.exit(1);
         }
     } else {
-        // Linux: use user-level systemctl (must be run as syncreeper)
-        if (username !== "syncreeper") {
-            console.error("\nOn Linux, this script must be run as the 'syncreeper' user.");
+        // Linux: use user-level systemctl (must be run as the service user)
+        if (username !== serviceUser) {
+            console.error(`\nOn Linux, this script must be run as the '${serviceUser}' user.`);
             console.error("");
             console.error("Options:");
-            console.error("  1. Run as syncreeper user:");
-            console.error("     sudo -u syncreeper npm run sync-now -- --local");
+            console.error(`  1. Run as ${serviceUser} user:`);
+            console.error(`     sudo -u ${serviceUser} npm run sync-now -- --local`);
             console.error("");
             console.error("  2. Use SSH mode (without --local):");
             console.error("     npm run sync-now");
             process.exit(1);
         }
 
-        // Running as syncreeper - use user-level systemctl
+        // Running as service user - use user-level systemctl
         const syncCommand = followLogs
             ? "systemctl --user start syncreeper-sync.service && journalctl --user -u syncreeper-sync -n 50 --no-pager"
             : "systemctl --user start syncreeper-sync.service";
@@ -115,7 +145,7 @@ async function runLocalSync(followLogs: boolean): Promise<void> {
             console.error("\nFailed to trigger sync. Make sure:");
             console.error("  1. SyncReeper has been deployed (pulumi up)");
             console.error("  2. The sync service is installed");
-            console.error("  3. User lingering is enabled (loginctl enable-linger syncreeper)");
+            console.error(`  3. User lingering is enabled (loginctl enable-linger ${serviceUser})`);
             process.exit(1);
         }
     }
@@ -123,6 +153,7 @@ async function runLocalSync(followLogs: boolean): Promise<void> {
 
 async function main(): Promise<void> {
     const args = await parseArgs();
+    const serviceUser = args.user ?? (await getDefaultServiceUser());
 
     console.log("\nManual Repository Sync\n");
 
@@ -138,7 +169,7 @@ async function main(): Promise<void> {
 
         user = await input({
             message: "SSH username:",
-            default: "syncreeper",
+            default: serviceUser,
         });
     }
 
@@ -156,14 +187,12 @@ async function main(): Promise<void> {
     if (args.local) {
         // Local execution with platform-aware logic
         console.log("Running locally...\n");
-        await runLocalSync(followLogs);
+        await runLocalSync(followLogs, serviceUser);
     } else {
         // Remote execution via SSH
-        // When SSH'ing as syncreeper user, the sync-repos script handles everything
         console.log(`\nConnecting to ${user}@${host}...\n`);
 
         // Build command for remote execution
-        // sync-repos script will check if user is syncreeper and use systemctl --user
         const syncCommand = followLogs
             ? "sync-repos && journalctl --user -u syncreeper-sync -n 50 --no-pager"
             : "sync-repos";

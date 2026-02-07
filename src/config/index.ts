@@ -11,14 +11,26 @@ import {
     type SSHConfig,
     type SyncConfig,
     DEFAULT_CONFIG,
+    getServiceUser,
+    setConfiguredUsername,
 } from "./types";
 
 /**
  * Loads and validates the complete SyncReeper configuration
- * from Pulumi config secrets and values
+ * from Pulumi config secrets and values.
+ *
+ * Also sets the module-level configured username so that
+ * getServiceUser(), getPaths(), and getDefaultConfig() use it.
  */
 export function getConfig(): SyncReeperConfig {
     const config = new pulumi.Config("syncreeper");
+
+    // Read the optional service-user config key and set it module-wide
+    const serviceUserName = config.get("service-user") ?? undefined;
+    setConfiguredUsername(serviceUserName);
+
+    // Now getServiceUser() / getPaths() / getDefaultConfig() will use the configured username
+    const resolvedUser = getServiceUser();
 
     const github: GitHubConfig = {
         token: config.requireSecret("github-token").apply((t) => t),
@@ -39,7 +51,13 @@ export function getConfig(): SyncReeperConfig {
         reposPath: config.get("repos-path") ?? DEFAULT_CONFIG.reposPath,
     };
 
-    return { github, syncthing, ssh, sync };
+    return {
+        github,
+        syncthing,
+        ssh,
+        sync,
+        serviceUser: resolvedUser.name,
+    };
 }
 
 export * from "./types";

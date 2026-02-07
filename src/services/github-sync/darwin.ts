@@ -10,7 +10,7 @@ import * as path from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import { runCommand, writeFile, copyFile } from "../../lib/command";
 import { enableServiceDarwin } from "../../lib/command.darwin";
-import { getPathsDarwin } from "../../config/paths.darwin";
+import { getPaths } from "../../config/types";
 import type { SetupGitHubSyncOptions, SetupGitHubSyncResult } from "./types";
 import type { SyncReeperConfig } from "../../config/types";
 
@@ -64,7 +64,7 @@ function getCalendarInterval(schedule: string): { Hour?: number; Minute?: number
  */
 function generateLaunchdPlist(
     config: SyncReeperConfig,
-    paths: ReturnType<typeof getPathsDarwin>
+    paths: ReturnType<typeof getPaths>
 ): string {
     const interval = getCalendarInterval(config.sync.schedule);
 
@@ -119,7 +119,7 @@ ${intervalXml}
 /**
  * Generates a convenience script for manual sync
  */
-function generateSyncScript(paths: ReturnType<typeof getPathsDarwin>): string {
+function generateSyncScript(paths: ReturnType<typeof getPaths>): string {
     return `#!/bin/bash
 # Manual trigger for SyncReeper sync
 # Runs the sync application directly
@@ -150,7 +150,7 @@ export function setupGitHubSyncDarwin(options: SetupGitHubSyncOptions): SetupGit
     const { config, dependsOn = [] } = options;
     const resources: pulumi.Resource[] = [];
 
-    const paths = getPathsDarwin();
+    const paths = getPaths();
 
     // Create directories
     const createDirs = runCommand({
