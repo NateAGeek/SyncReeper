@@ -1,0 +1,29 @@
+{
+    "name": "@syncreeper/host-utils",
+    "version": "1.0.0",
+    "description": "CLI utility scripts for managing SyncReeper deployments",
+    "bin": {
+        "syncreeper-setup": "src/setup.ts",
+        "syncreeper-get-device-id": "src/get-device-id.ts",
+        "syncreeper-add-device": "src/add-device.ts",
+        "syncreeper-sync-now": "src/sync-now.ts"
+    },
+    "scripts": {
+        "setup": "tsx src/setup.ts",
+        "get-device-id": "tsx src/get-device-id.ts",
+        "add-device": "tsx src/add-device.ts",
+        "sync-now": "tsx src/sync-now.ts"
+    },
+    "dependencies": {
+        "@inquirer/prompts": "^7.0.0",
+        "@syncreeper/shared": "workspace:*",
+        "execa": "^9.0.0",
+        "yargs": "^17.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "@types/yargs": "^17.0.0",
+        "tsx": "^4.7.0",
+        "typescript": "^5.0.0"
+    }
+}

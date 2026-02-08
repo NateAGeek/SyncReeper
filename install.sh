@@ -270,6 +270,15 @@ main() {
         error "npm not found. Please reinstall Node.js via NVM: nvm install ${NODE_VERSION}"
     fi
 
+    # Check/install pnpm
+    if command_exists pnpm; then
+        success "pnpm is installed ($(pnpm --version))"
+    else
+        info "Installing pnpm..."
+        npm install -g pnpm
+        success "pnpm installed ($(pnpm --version))"
+    fi
+
     # Check Pulumi
     if command_exists pulumi; then
         success "Pulumi is installed ($(pulumi version))"
@@ -295,34 +304,29 @@ main() {
     echo "=========================================="
     echo ""
 
-    info "Installing main project dependencies..."
-    npm install
-    success "Main dependencies installed"
-
-    info "Installing sync application dependencies..."
-    cd sync
-    npm install
-    cd ..
-    success "Sync dependencies installed"
+    info "Installing all workspace dependencies..."
+    pnpm install
+    success "Dependencies installed"
 
     echo ""
     info "Building project..."
+    info "  - Building shared utilities..."
     info "  - Building Pulumi infrastructure code..."
     info "  - Bundling sync application with Rollup..."
-    npm run build:all
+    pnpm run build
     success "Project built successfully"
 
     # Verify the sync bundle was created
-    if [ -f "sync/dist/bundle.js" ]; then
-        BUNDLE_SIZE=$(du -h sync/dist/bundle.js | cut -f1)
+    if [ -f "packages/sync/dist/bundle.js" ]; then
+        BUNDLE_SIZE=$(du -h packages/sync/dist/bundle.js | cut -f1)
         success "Sync app bundle created (${BUNDLE_SIZE})"
     else
-        error "Sync app bundle not found at sync/dist/bundle.js"
+        error "Sync app bundle not found at packages/sync/dist/bundle.js"
     fi
 
     echo ""
     info "Running lint and format checks..."
-    npm run check
+    pnpm run check
     success "All checks passed"
 
     # Setup Pulumi
@@ -419,7 +423,7 @@ main() {
     if [[ "$SKIP_SETUP" == "false" ]]; then
         info "Starting interactive setup..."
         echo ""
-        npm run setup
+        pnpm run setup
     fi
 
     # Done
@@ -450,7 +454,7 @@ main() {
         echo "     ${BLUE}pulumi up${NC}"
         echo ""
         echo "  3. Get your VPS Syncthing device ID:"
-        echo "     ${BLUE}npm run get-device-id${NC}"
+        echo "     ${BLUE}pnpm run get-device-id${NC}"
     fi
 
     echo ""

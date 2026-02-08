@@ -8,6 +8,7 @@ SyncReeper is a Pulumi-based Infrastructure-as-Code (IaC) project written in Typ
 2. **Continuous Sync** — Keeps repositories updated on a daily schedule via systemd timers (Linux) or launchd (macOS).
 3. **Cross-Device Sync** — Syncs repository mirrors across multiple devices using Syncthing.
 4. **Server Hardening** — Configures firewall rules, SSH hardening, SSHGuard brute-force protection, and automatic security updates.
+5. **Traffic Passthrough** — (Planned) Node.js proxy on VPS that forwards traffic through a WireGuard tunnel to a host with a private IP.
 
 The project supports both **Linux (Ubuntu VPS)** and **macOS (local)** deployments.
 
@@ -15,12 +16,15 @@ The project supports both **Linux (Ubuntu VPS)** and **macOS (local)** deploymen
 
 ## High-Level Architecture
 
-SyncReeper is composed of two sub-projects:
+SyncReeper is organized as a **pnpm workspaces monorepo** with 5 packages:
 
-| Sub-Project          | Location | Module System     | Purpose                                                                     |
-| -------------------- | -------- | ----------------- | --------------------------------------------------------------------------- |
-| **Infrastructure**   | `src/`   | CommonJS (Pulumi) | Provisions and configures the system using `@pulumi/command` local commands |
-| **Sync Application** | `sync/`  | ESM (Node.js)     | Standalone app that fetches GitHub repos and clones/updates them locally    |
+| Package                          | Location                     | Module System     | Purpose                                                                  |
+| -------------------------------- | ---------------------------- | ----------------- | ------------------------------------------------------------------------ |
+| **@syncreeper/shared**           | `packages/shared/`           | CommonJS          | Platform detection utilities and shared type interfaces                  |
+| **@syncreeper/host**             | `packages/host/`             | CommonJS (Pulumi) | Pulumi infrastructure code — provisions and configures the system        |
+| **@syncreeper/sync**             | `packages/sync/`             | ESM (Node.js)     | Standalone app that fetches GitHub repos and clones/updates them locally |
+| **@syncreeper/host-utils**       | `packages/host-utils/`       | CommonJS          | CLI scripts for managing deployments (setup wizard, device management)   |
+| **@syncreeper/node-passthrough** | `packages/node-passthrough/` | ESM               | (Scaffold) VPS traffic proxy via WireGuard tunnel to host                |
 
 The infrastructure code deploys the sync application as a bundled `bundle.js` file to the target system and sets up a timer/scheduler to run it daily.
 
@@ -30,107 +34,131 @@ The infrastructure code deploys the sync application as a bundled `bundle.js` fi
 
 ```
 SyncReeper/
-├── package.json                        # Root project config (Pulumi infra + scripts)
-├── tsconfig.json                       # TypeScript config (CommonJS, ES2022, outDir: ./dist)
-├── Pulumi.yaml                         # Pulumi project definition (nodejs/typescript runtime)
+├── package.json                        # Root workspace config (private, pnpm scripts)
+├── pnpm-workspace.yaml                 # pnpm workspace definition (packages/*)
+├── tsconfig.base.json                  # Shared TypeScript base config (ES2022, strict)
+├── Pulumi.yaml                         # Pulumi project definition (points to packages/host/dist)
 ├── Pulumi.dev.yaml                     # Encrypted Pulumi stack config (dev stack)
-├── eslint.config.js                    # ESLint flat config for both src/ and sync/src/
-├── .editorconfig                       # Editor settings (4-space indent, LF line endings)
-├── .prettierrc                         # Prettier config (4-space tabs, double quotes, 100 width)
+├── eslint.config.js                    # ESLint flat config for all packages
+├── .editorconfig                       # Editor settings (4-space indent, 2-space for JSON/YAML, LF)
+├── .prettierrc                         # Prettier config (4-space width, double quotes, 100 width)
 ├── .prettierignore                     # Prettier ignore list
-├── .gitignore                          # Ignores dist/, node_modules/, .pulumi/, .env files
-├── install.sh                          # Bash installer (Linux/macOS) — NVM, Node.js, Pulumi, deps
-├── install.ps1                         # PowerShell installer (Windows) — winget/choco
-├── README.md                           # User-facing documentation (setup, usage, troubleshooting)
+├── .gitignore                          # Ignores dist/, node_modules/, .pulumi/, .env, test-repos/
+├── install.sh                          # Bash installer (Linux/macOS) — pnpm, Node.js, Pulumi
+├── install.ps1                         # PowerShell installer (Windows) — pnpm, winget/choco
+├── README.md                           # User-facing documentation
+├── architecture.md                     # This file
 │
-├── src/                                # PULUMI INFRASTRUCTURE CODE
-│   ├── index.ts                        # Main orchestrator — 4-phase deployment pipeline
+├── packages/
+│   ├── shared/                         # @syncreeper/shared
+│   │   ├── package.json                # CJS, no runtime deps
+│   │   ├── tsconfig.json               # Extends base, CommonJS module
+│   │   └── src/
+│   │       ├── index.ts                # Barrel export
+│   │       ├── platform.ts             # Platform detection (isLinux, isMacOS, isWindows, etc.)
+│   │       └── types.ts                # Shared interfaces + DEFAULT_SERVICE_USER_LINUX constant
 │   │
-│   ├── config/
-│   │   ├── index.ts                    # Config loader — reads Pulumi config, sets service username
-│   │   ├── types.ts                    # Config interfaces and platform-aware getters
-│   │   ├── paths.linux.ts              # Linux filesystem paths
-│   │   └── paths.darwin.ts             # macOS filesystem paths
+│   ├── host/                           # @syncreeper/host — PULUMI INFRASTRUCTURE
+│   │   ├── package.json                # Deps: @pulumi/command, @pulumi/pulumi, @syncreeper/shared
+│   │   ├── tsconfig.json               # Extends base, CommonJS module (Pulumi requirement)
+│   │   └── src/
+│   │       ├── index.ts                # Main orchestrator — 4-phase deployment pipeline
+│   │       ├── config/
+│   │       │   ├── index.ts            # Config loader — reads Pulumi config, sets service username
+│   │       │   ├── types.ts            # Platform-aware getters, re-exports shared types
+│   │       │   ├── paths.linux.ts      # Linux filesystem paths
+│   │       │   └── paths.darwin.ts     # macOS filesystem paths
+│   │       ├── lib/
+│   │       │   ├── index.ts            # Re-exports command module
+│   │       │   ├── command.ts          # Core command abstraction over @pulumi/command
+│   │       │   ├── command.linux.ts    # Linux service enablement (systemctl)
+│   │       │   └── command.darwin.ts   # macOS service enablement (launchctl, brew services)
+│   │       ├── resources/
+│   │       │   ├── index.ts            # Re-exports user + directories
+│   │       │   ├── user.ts             # Service user creation dispatcher
+│   │       │   ├── user.linux.ts       # Creates dedicated system user via useradd
+│   │       │   ├── user.darwin.ts      # Validates existing macOS user
+│   │       │   └── directories.ts      # Creates repos dir, sync app dir, syncthing config dir
+│   │       └── services/               # Each service has: index.ts, types.ts, linux.ts, darwin.ts
+│   │           ├── packages/           # Package installation (apt-get / brew + NVM/Node.js)
+│   │           ├── firewall/           # Firewall config (UFW / pf)
+│   │           ├── ssh/                # SSH hardening (index.ts only — Linux only)
+│   │           ├── sshguard/           # Brute-force protection
+│   │           ├── auto-updates/       # Automatic security updates
+│   │           ├── github-sync/        # Sync app deployment + timer/scheduler
+│   │           └── syncthing/          # Syncthing config + device management (+ stignore.ts)
 │   │
-│   ├── lib/
-│   │   ├── index.ts                    # Re-exports command module
-│   │   ├── platform.ts                 # Platform detection utilities
-│   │   ├── command.ts                  # Core command abstraction over @pulumi/command
-│   │   ├── command.linux.ts            # Linux service enablement (systemctl)
-│   │   └── command.darwin.ts           # macOS service enablement (launchctl, brew services)
+│   ├── sync/                           # @syncreeper/sync — STANDALONE SYNC APPLICATION
+│   │   ├── package.json                # ESM, deps: @octokit/rest, simple-git, proper-lockfile
+│   │   ├── tsconfig.json               # Extends base, NodeNext module
+│   │   ├── rollup.config.js            # Bundles to single dist/bundle.js
+│   │   └── src/
+│   │       ├── index.ts                # Entry point: config → lock → fetch repos → sync → summary
+│   │       ├── github.ts               # GitHub API client (Octokit, paginated repo fetching)
+│   │       ├── git.ts                  # Git operations (clone/update with authenticated URLs)
+│   │       └── lock.ts                 # Lock file handling (proper-lockfile, 10-min stale timeout)
 │   │
-│   ├── resources/
-│   │   ├── index.ts                    # Re-exports user + directories
-│   │   ├── user.ts                     # Service user creation dispatcher
-│   │   ├── user.linux.ts               # Creates dedicated system user via useradd
-│   │   ├── user.darwin.ts              # Validates existing macOS user
-│   │   └── directories.ts             # Creates repos dir, sync app dir, syncthing config dir
+│   ├── host-utils/                     # @syncreeper/host-utils — CLI SCRIPTS
+│   │   ├── package.json                # Deps: @inquirer/prompts, yargs, execa, @syncreeper/shared
+│   │   │                               # bin entries for each script, runs via tsx (no build step)
+│   │   ├── tsconfig.json               # Extends base, CommonJS module
+│   │   └── src/
+│   │       ├── setup.ts                # Interactive setup wizard (@inquirer/prompts)
+│   │       ├── get-device-id.ts        # CLI to get Syncthing device ID
+│   │       ├── add-device.ts           # CLI to add a Syncthing device
+│   │       └── sync-now.ts             # CLI to trigger manual sync
 │   │
-│   ├── services/
-│   │   ├── packages/
-│   │   │   ├── index.ts                # Platform dispatcher for package installation
-│   │   │   ├── types.ts                # SetupPackagesOptions/Result interfaces
-│   │   │   ├── linux.ts                # apt-get install + NVM/Node.js 22
-│   │   │   └── darwin.ts               # brew install + NVM/Node.js 22
-│   │   │
-│   │   ├── firewall/
-│   │   │   ├── index.ts                # Platform dispatcher
-│   │   │   ├── types.ts                # FirewallRule interface, default rules (SSH rate limit)
-│   │   │   ├── linux.ts                # UFW firewall configuration
-│   │   │   └── darwin.ts               # pf (packet filter) configuration
-│   │   │
-│   │   ├── ssh/
-│   │   │   └── index.ts                # Linux-only SSH hardening (sshd_config.d drop-in)
-│   │   │
-│   │   ├── sshguard/
-│   │   │   ├── index.ts                # Platform dispatcher
-│   │   │   ├── types.ts                # SSHGuard config constants (block time, thresholds)
-│   │   │   ├── linux.ts                # Whitelist + systemd service
-│   │   │   └── darwin.ts               # Whitelist + pf table + brew service
-│   │   │
-│   │   ├── auto-updates/
-│   │   │   ├── index.ts                # Platform dispatcher
-│   │   │   ├── types.ts                # Auto-update options (email, reboot settings)
-│   │   │   ├── linux.ts                # unattended-upgrades configuration
-│   │   │   └── darwin.ts               # No-op on macOS
-│   │   │
-│   │   ├── github-sync/
-│   │   │   ├── index.ts                # Platform dispatcher
-│   │   │   ├── types.ts                # SetupGitHubSyncOptions/Result interfaces
-│   │   │   ├── linux.ts                # User-level systemd service + timer deployment
-│   │   │   └── darwin.ts               # launchd plist deployment
-│   │   │
-│   │   └── syncthing/
-│   │       ├── index.ts                # Platform dispatcher
-│   │       ├── types.ts                # SetupSyncthingOptions/Result interfaces
-│   │       ├── stignore.ts             # Generates .stignore for common build artifacts
-│   │       ├── linux.ts                # Syncthing CLI configuration + systemd service
-│   │       └── darwin.ts               # Syncthing CLI configuration + brew service
-│   │
-│   └── scripts/
-│       ├── setup.ts                    # Interactive setup wizard (@inquirer/prompts)
-│       ├── get-device-id.ts            # CLI to get Syncthing device ID
-│       ├── add-device.ts               # CLI to add a Syncthing device
-│       └── sync-now.ts                 # CLI to trigger manual sync
-│
-└── sync/                               # STANDALONE SYNC APPLICATION
-    ├── package.json                    # ESM module with sync-specific dependencies
-    ├── tsconfig.json                   # TypeScript config (NodeNext, ES2022)
-    ├── rollup.config.js                # Bundles to single dist/bundle.js
-    ├── eslint.config.js                # ESLint config
-    ├── .prettierrc                     # Prettier config
-    ├── .prettierignore                 # Prettier ignore
-    ├── .env.local.example              # Example env vars (GITHUB_TOKEN, GITHUB_USERNAME, REPOS_PATH)
-    └── src/
-        ├── index.ts                    # Entry point: config → lock → fetch repos → sync → summary
-        ├── github.ts                   # GitHub API client (Octokit, paginated repo fetching)
-        ├── git.ts                      # Git operations (clone/update with authenticated URLs)
-        └── lock.ts                     # Lock file handling (proper-lockfile, 10-min stale timeout)
+│   └── node-passthrough/               # @syncreeper/node-passthrough — TRAFFIC PROXY (scaffold)
+│       ├── package.json                # ESM, private, v0.1.0, deps: @syncreeper/shared
+│       ├── tsconfig.json               # Extends base, NodeNext module
+│       └── src/
+│           └── index.ts                # Placeholder — not yet implemented
 ```
 
 ---
 
-## Infrastructure Code (`src/`)
+## Package Dependency Graph
+
+```
+@syncreeper/shared          (no internal deps)
+    ↑
+    ├── @syncreeper/host          (+ @pulumi/pulumi, @pulumi/command)
+    ├── @syncreeper/host-utils    (+ @inquirer/prompts, yargs, execa)
+    └── @syncreeper/node-passthrough
+
+@syncreeper/sync                 (independent — @octokit/rest, simple-git, proper-lockfile)
+```
+
+---
+
+## Shared Library (`packages/shared/`)
+
+Provides platform detection and shared types consumed by `host`, `host-utils`, and `node-passthrough`. Has no runtime dependencies.
+
+### Platform Detection (`src/platform.ts`)
+
+Exports the `Platform` type (`"linux" | "darwin" | "win32"`) and utility functions:
+
+- `detectPlatform()` — Returns the current OS platform
+- `isLinux()`, `isMacOS()`, `isWindows()` — Boolean platform checks
+- `getPlatformDisplayName()` — Human-readable name (e.g., "Linux", "macOS")
+- `getCurrentUsername()` — Returns `os.userInfo().username`
+- `getHomeDirectory()` — Returns `os.homedir()`
+- `isSupportedPlatform()` — Returns `true` for Linux and macOS
+- `assertSupportedPlatform()` — Throws on unsupported platforms
+- `logPlatformBanner()` — Logs platform info to console
+
+### Shared Types (`src/types.ts`)
+
+Exports interfaces: `GitHubConfig`, `SyncthingConfig`, `SSHConfig`, `SyncConfig`, `SyncReeperConfig`, `ServiceUserConfig`, `PathsConfig`, `DefaultConfig`.
+
+Also exports the constant `DEFAULT_SERVICE_USER_LINUX = "syncreeper"`.
+
+> **Note:** `DEFAULT_SERVICE_USER_LINUX` is also defined locally in `packages/host/src/config/paths.linux.ts` for use within the host package's config system. The host-utils scripts import it from `@syncreeper/shared`.
+
+---
+
+## Infrastructure Code (`packages/host/`)
 
 ### Main Orchestrator (`src/index.ts`)
 
@@ -143,11 +171,11 @@ The entry point for Pulumi. It runs a **4-phase deployment pipeline** with expli
 | **Phase 3: Security**           | Configures firewall (UFW/pf), SSH hardening, SSHGuard brute-force protection, and automatic security updates                                   |
 | **Phase 4: App Services**       | Deploys the sync application bundle, sets up the GitHub sync timer/scheduler, and configures Syncthing with trusted devices and shared folders |
 
-After deployment, it exports post-deployment instructions for the user.
+After deployment, it exports an `outputs` object containing `platform`, `serviceUser`, `reposPath`, `postDeploymentInstructions`, and `commands` for post-deployment reference.
 
 ### Config System (`src/config/`)
 
-- **`types.ts`** — Defines interfaces for all configuration sections (`GitHubConfig`, `SyncthingConfig`, `SSHConfig`, etc.) and provides platform-aware getter functions: `getServiceUser()`, `getPaths()`, `getDefaultConfig()`. Uses a module-level `_configuredUsername` variable set during config loading for cross-module access.
+- **`types.ts`** — Re-exports shared type interfaces from `@syncreeper/shared` (`GitHubConfig`, `SyncthingConfig`, `SSHConfig`, `SyncConfig`, `SyncReeperConfig`, `ServiceUserConfig`, `PathsConfig`, `DefaultConfig`). Also re-exports `DEFAULT_SERVICE_USER_LINUX` from `./paths.linux`. Provides platform-aware getter functions: `getServiceUser()`, `getPaths()`, `getDefaultConfig()`. Uses a module-level `_configuredUsername` variable set via `setConfiguredUsername()` during config loading for cross-module access. Includes legacy deprecated exports (`DEFAULT_CONFIG`, `SERVICE_USER`, `PATHS`) for backward compatibility.
 - **`index.ts`** — Reads Pulumi config values and populates the configuration objects.
 - **`paths.linux.ts` / `paths.darwin.ts`** — Platform-specific filesystem paths:
     - Linux: `/home/{user}`, `/srv/repos`, `/etc/syncreeper`, systemd directories
@@ -155,8 +183,7 @@ After deployment, it exports post-deployment instructions for the user.
 
 ### Lib Layer (`src/lib/`)
 
-- **`platform.ts`** — Platform detection utilities: `isLinux()`, `isMacOS()`, `isWindows()`, `assertSupportedPlatform()`.
-- **`command.ts`** — Core abstraction over `@pulumi/command` `local.Command`. Provides:
+- **`command.ts`** — Core abstraction over `@pulumi/command` `local.Command`. Imports platform utilities from `@syncreeper/shared`. Provides:
     - `runCommand()` — Execute a shell command as a Pulumi resource
     - `writeFile()` — Write content to a file on the target system
     - `copyFile()` — Copy a file to the target
@@ -166,7 +193,7 @@ After deployment, it exports post-deployment instructions for the user.
 
 ### Resources (`src/resources/`)
 
-- **`user.ts`** — Dispatches to `user.linux.ts` (creates a dedicated system user via `useradd`) or `user.darwin.ts` (validates an existing macOS user).
+- **`user.ts`** — Dispatches to `user.linux.ts` (creates a dedicated system user via `useradd`) or `user.darwin.ts` (validates an existing macOS user). Imports platform detection from `@syncreeper/shared`.
 - **`directories.ts`** — Creates the repositories directory, sync application directory, and Syncthing configuration directory.
 
 ### Services (`src/services/`)
@@ -175,7 +202,7 @@ Each service follows a consistent **platform abstraction pattern**:
 
 ```
 service/
-├── index.ts        # Dispatcher — checks platform, delegates to linux.ts or darwin.ts
+├── index.ts        # Dispatcher — checks isLinux()/isMacOS() from @syncreeper/shared
 ├── types.ts        # Shared interfaces and constants
 ├── linux.ts        # Linux implementation
 └── darwin.ts       # macOS implementation
@@ -192,7 +219,7 @@ Installs system dependencies. Linux uses `apt-get`, macOS uses `brew`. Both inst
 
 #### SSH (`services/ssh/`)
 
-**Linux-only.** Writes an SSH hardening drop-in config to `/etc/ssh/sshd_config.d/`: disables password authentication, disables root login, restricts access to the service user, enforces key-only authentication. Also deploys authorized keys.
+**Linux-only.** Contains only `index.ts` (no platform split since macOS has no SSH hardening). Writes an SSH hardening drop-in config to `/etc/ssh/sshd_config.d/`: disables password authentication, disables root login, restricts access to the service user, enforces key-only authentication. Also deploys authorized keys.
 
 #### SSHGuard (`services/sshguard/`)
 
@@ -216,20 +243,13 @@ Configures Syncthing for peer-to-peer file synchronization:
 
 - Stops the service, generates keys, writes a comprehensive `.stignore` file (excludes OS files, `node_modules`, Python venvs, Rust `target/`, Go vendor, Java build dirs, C/C++ objects, logs, `.env` files, test coverage, etc.), enables the service, waits for readiness, configures trusted devices and shared folders via the Syncthing CLI, and creates a `syncreeper-device-id` convenience script.
 
-### Scripts (`src/scripts/`)
-
-- **`setup.ts`** — Interactive setup wizard using `@inquirer/prompts`. Prompts for service username, GitHub credentials, Syncthing API key, trusted devices, SSH keys, and optional settings. Saves values to Pulumi config.
-- **`get-device-id.ts`** — CLI tool (yargs) to retrieve the Syncthing device ID locally or via SSH.
-- **`add-device.ts`** — CLI tool to add a Syncthing device. Validates device ID format and runs the Syncthing CLI locally or via SSH.
-- **`sync-now.ts`** — CLI tool to trigger a manual sync. Uses `systemctl --user` on Linux, `sync-repos` script on macOS, or connects via SSH.
-
 ---
 
-## Sync Application (`sync/`)
+## Sync Application (`packages/sync/`)
 
 A standalone Node.js application (ESM) that performs the actual repository synchronization. It is bundled by Rollup into a single `dist/bundle.js` for deployment.
 
-### Entry Point (`sync/src/index.ts`)
+### Entry Point (`src/index.ts`)
 
 Orchestrates the sync process:
 
@@ -240,11 +260,11 @@ Orchestrates the sync process:
 5. Print a summary of results
 6. Release the lock
 
-### GitHub Client (`sync/src/github.ts`)
+### GitHub Client (`src/github.ts`)
 
 Uses `@octokit/rest` with pagination to fetch all repositories the user has access to (owned, collaborator, organization member). Filters out archived repositories.
 
-### Git Operations (`sync/src/git.ts`)
+### Git Operations (`src/git.ts`)
 
 Uses `simple-git` for:
 
@@ -253,48 +273,94 @@ Uses `simple-git` for:
 
 Temporarily injects the authenticated URL during operations and restores the non-authenticated URL afterward for security.
 
-### Lock File (`sync/src/lock.ts`)
+### Lock File (`src/lock.ts`)
 
 Uses `proper-lockfile` to prevent concurrent sync runs. Lock has a 10-minute stale timeout and no retries (fails immediately if locked).
 
 ---
 
+## CLI Scripts (`packages/host-utils/`)
+
+- **`setup.ts`** — Interactive setup wizard using `@inquirer/prompts`. Prompts for service username, GitHub credentials, Syncthing API key, trusted devices, SSH keys, and optional settings. Saves values to Pulumi config.
+- **`get-device-id.ts`** — CLI tool (yargs) to retrieve the Syncthing device ID locally or via SSH.
+- **`add-device.ts`** — CLI tool to add a Syncthing device. Validates device ID format and runs the Syncthing CLI locally or via SSH.
+- **`sync-now.ts`** — CLI tool to trigger a manual sync. Uses `systemctl --user` on Linux, `sync-repos` script on macOS, or connects via SSH.
+
+All scripts import `DEFAULT_SERVICE_USER_LINUX` from `@syncreeper/shared`.
+
+---
+
+## Node Passthrough (`packages/node-passthrough/`) — Planned
+
+A Node.js proxy that will run on the VPS and forward incoming traffic through a WireGuard tunnel to the host machine. The host has a private IP and the VPS has a public IP, so the VPS acts as a reverse proxy/traffic forwarder.
+
+This package is currently a scaffold with a placeholder `src/index.ts`.
+
+---
+
 ## Key Architecture Patterns
+
+### Monorepo with pnpm Workspaces
+
+The project uses pnpm workspaces (`pnpm-workspace.yaml`) to manage 5 packages. The workspace config also specifies `ignoredBuiltDependencies` for `@pulumi/command`, `esbuild`, and `protobufjs` to avoid build script prompts. A shared `tsconfig.base.json` at the root provides common TypeScript compiler options that each package extends. Dependencies between packages use `workspace:*` protocol.
 
 ### Platform Abstraction
 
-Every service follows the same pattern: an `index.ts` dispatcher checks `isLinux()` or `isMacOS()` and delegates to the corresponding platform-specific implementation. This keeps platform logic isolated and makes it straightforward to add new platform support.
+Every service follows the same pattern: an `index.ts` dispatcher checks `isLinux()` or `isMacOS()` (imported from `@syncreeper/shared`) and delegates to the corresponding platform-specific implementation. This keeps platform logic isolated and makes it straightforward to add new platform support.
 
 ### Pulumi Command Wrapping
 
-All system configuration is performed via `@pulumi/command` `local.Command` resources. The `src/lib/command.ts` module provides higher-level abstractions (`runCommand`, `writeFile`, `copyFile`, `enableService`) that handle platform differences and Pulumi resource management.
+All system configuration is performed via `@pulumi/command` `local.Command` resources. The `packages/host/src/lib/command.ts` module provides higher-level abstractions (`runCommand`, `writeFile`, `copyFile`, `enableService`) that handle platform differences and Pulumi resource management.
 
 ### Phased Deployment
 
-`src/index.ts` orchestrates deployment in 4 ordered phases with explicit Pulumi `dependsOn` chains. This ensures resources are created in the correct order (e.g., user exists before directories are created, packages are installed before services are configured).
+`packages/host/src/index.ts` orchestrates deployment in 4 ordered phases with explicit Pulumi `dependsOn` chains. This ensures resources are created in the correct order (e.g., user exists before directories are created, packages are installed before services are configured).
 
 ### User-Level Systemd Services (Linux)
 
 The GitHub sync service runs as a user-level systemd service (`systemctl --user`) with `loginctl enable-linger` enabled so the service persists without an active login session. Syncthing uses the system-level `syncthing@user` template unit.
 
-### Two-Project Build
+### Module System Strategy
 
-The root project uses CommonJS (required by Pulumi) while the sync application uses ESM. Rollup bundles the sync app into a single file, which the infrastructure code deploys to the target system.
+- **@syncreeper/shared** and **@syncreeper/host** use CommonJS (Pulumi requires CJS)
+- **@syncreeper/sync** uses ESM with Rollup bundling to a single `bundle.js`
+- **@syncreeper/host-utils** uses CommonJS (runs scripts directly via `tsx`, no build step)
+- **@syncreeper/node-passthrough** uses ESM (NodeNext)
+
+### Root Scripts
+
+The root `package.json` provides workspace-level scripts:
+
+| Script          | Command                                                  | Purpose                             |
+| --------------- | -------------------------------------------------------- | ----------------------------------- |
+| `build`         | `pnpm -r build`                                          | Build all packages                  |
+| `build:host`    | `pnpm --filter shared build && pnpm --filter host build` | Build shared + host only            |
+| `build:sync`    | `pnpm --filter @syncreeper/sync build`                   | Build sync package only             |
+| `setup`         | `pnpm --filter @syncreeper/host-utils setup`             | Run interactive setup wizard        |
+| `get-device-id` | `pnpm --filter @syncreeper/host-utils get-device-id`     | Get Syncthing device ID             |
+| `add-device`    | `pnpm --filter @syncreeper/host-utils add-device`        | Add a Syncthing device              |
+| `sync-now`      | `pnpm --filter @syncreeper/host-utils sync-now`          | Trigger manual sync                 |
+| `lint`          | `eslint .`                                               | Lint all packages                   |
+| `format`        | `prettier --write .`                                     | Format all files                    |
+| `check`         | `lint && format:check && build`                          | Full CI check (lint, format, build) |
+| `clean`         | `pnpm -r clean`                                          | Remove all dist/ directories        |
 
 ---
 
 ## Technologies & Dependencies
 
-| Dependency            | Purpose                                                    |
-| --------------------- | ---------------------------------------------------------- |
-| `@pulumi/pulumi`      | Infrastructure-as-Code framework                           |
-| `@pulumi/command`     | Execute local shell commands as Pulumi resources           |
-| `@octokit/rest`       | GitHub REST API client for fetching repositories           |
-| `simple-git`          | Node.js Git client for clone and fetch operations          |
-| `proper-lockfile`     | File-based locking to prevent concurrent sync runs         |
-| `@inquirer/prompts`   | Interactive CLI prompts for the setup wizard               |
-| `yargs`               | CLI argument parsing for helper scripts                    |
-| `execa`               | Process execution for helper scripts                       |
-| `rollup`              | Bundles the sync application into a single deployable file |
-| `typescript`          | Type-safe development across both sub-projects             |
-| `eslint` + `prettier` | Code quality and formatting                                |
+| Dependency            | Package                            | Purpose                                                    |
+| --------------------- | ---------------------------------- | ---------------------------------------------------------- |
+| `@pulumi/pulumi`      | host                               | Infrastructure-as-Code framework                           |
+| `@pulumi/command`     | host                               | Execute local shell commands as Pulumi resources           |
+| `@octokit/rest`       | sync                               | GitHub REST API client for fetching repositories           |
+| `simple-git`          | sync                               | Node.js Git client for clone and fetch operations          |
+| `proper-lockfile`     | sync                               | File-based locking to prevent concurrent sync runs         |
+| `@inquirer/prompts`   | host-utils                         | Interactive CLI prompts for the setup wizard               |
+| `yargs`               | host-utils                         | CLI argument parsing for helper scripts                    |
+| `execa`               | host-utils                         | Process execution for helper scripts                       |
+| `tsx`                 | host-utils, sync, node-passthrough | TypeScript execution without compilation step              |
+| `rollup`              | sync (devDep)                      | Bundles the sync application into a single deployable file |
+| `typescript`          | all (devDep)                       | Type-safe development across all packages                  |
+| `eslint` + `prettier` | root (devDep)                      | Code quality and formatting (flat config)                  |
+| `pnpm`                | root                               | Workspace-aware package manager                            |

@@ -2,11 +2,9 @@
 
 # Build outputs
 dist/
-sync/dist/
 
 # Dependencies
 node_modules/
-sync/node_modules/
 
 # Pulumi state
 .pulumi/
@@ -14,4 +12,3 @@ sync/node_modules/
 # Lock files (formatting can break them)
 package-lock.json
 pnpm-lock.yaml
-sync/package-lock.json

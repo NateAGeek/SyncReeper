@@ -2,8 +2,9 @@ name: syncreeper
 runtime:
     name: nodejs
     options:
-        typescript: true
+        typescript: false
 description: Sync GitHub repos across devices via Syncthing on a secured VPS
+main: packages/host/dist
 config:
     pulumi:tags:
         value:

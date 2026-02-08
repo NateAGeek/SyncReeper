@@ -1,14 +1,11 @@
 node_modules/
 dist/
-sync/dist/
 *.log
 .pulumi/
 Pulumi.*.yaml
 !Pulumi.yaml
 .env
 .env.local
-sync/.env.local
 
 # Local test repos directory
 test-repos/
-sync/test-repos/

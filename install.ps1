@@ -155,6 +155,18 @@ function Main {
         Write-Error "npm not found. Please reinstall Node.js."
     }
     
+    # Check/install pnpm
+    if (Test-Command "pnpm") {
+        $pnpmVersion = pnpm --version
+        Write-Success "pnpm is installed ($pnpmVersion)"
+    } else {
+        Write-Info "Installing pnpm..."
+        npm install -g pnpm
+        # Refresh PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        Write-Success "pnpm installed"
+    }
+    
     # Check Pulumi
     if (Test-Command "pulumi") {
         $pulumiVersion = pulumi version
@@ -181,24 +193,18 @@ function Main {
     Write-Host "==========================================" -ForegroundColor Cyan
     Write-Host ""
     
-    Write-Info "Installing main project dependencies..."
-    npm install
-    Write-Success "Main dependencies installed"
-    
-    Write-Info "Installing sync application dependencies..."
-    Push-Location sync
-    npm install
-    Pop-Location
-    Write-Success "Sync dependencies installed"
+    Write-Info "Installing all workspace dependencies..."
+    pnpm install
+    Write-Success "Dependencies installed"
     
     Write-Host ""
     Write-Info "Building project..."
-    npm run build:all
+    pnpm run build
     Write-Success "Project built successfully"
     
     Write-Host ""
     Write-Info "Running lint and format checks..."
-    npm run check
+    pnpm run check
     Write-Success "All checks passed"
     
     # Setup Pulumi
@@ -230,7 +236,7 @@ function Main {
     Write-Info "Starting interactive setup..."
     Write-Host ""
     
-    npm run setup
+    pnpm run setup
     
     # Done
     Write-Host ""
@@ -249,7 +255,7 @@ function Main {
     Write-Host "     pulumi up" -ForegroundColor Blue
     Write-Host ""
     Write-Host "  3. Get your VPS Syncthing device ID:" -ForegroundColor White
-    Write-Host "     npm run get-device-id" -ForegroundColor Blue
+    Write-Host "     pnpm run get-device-id" -ForegroundColor Blue
     Write-Host ""
     Write-Host "  4. Add the device ID to Syncthing on your other machines" -ForegroundColor White
     Write-Host ""

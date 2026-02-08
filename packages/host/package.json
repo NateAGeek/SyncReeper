@@ -1,0 +1,22 @@
+{
+    "name": "@syncreeper/host",
+    "version": "1.0.0",
+    "description": "SyncReeper host infrastructure - Pulumi-based IaC for system provisioning and configuration",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "clean": "rimraf dist",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@pulumi/command": "^1.0.0",
+        "@pulumi/pulumi": "^3.0.0",
+        "@syncreeper/shared": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+        "vitest": "^4.0.18"
+    }
+}

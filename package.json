@@ -1,21 +1,22 @@
 {
     "name": "syncreeper",
     "version": "1.0.0",
+    "private": true,
     "description": "Pulumi project to sync GitHub repos across devices via Syncthing on a secured VPS",
-    "main": "dist/index.js",
     "scripts": {
-        "build": "tsc",
-        "build:sync": "npm run build --prefix sync",
-        "build:all": "npm run build && npm run build:sync",
-        "setup": "npx tsx src/scripts/setup.ts",
-        "get-device-id": "npx tsx src/scripts/get-device-id.ts",
-        "add-device": "npx tsx src/scripts/add-device.ts",
-        "sync-now": "npx tsx src/scripts/sync-now.ts",
+        "build": "pnpm -r build",
+        "build:host": "pnpm --filter @syncreeper/shared build && pnpm --filter @syncreeper/host build",
+        "build:sync": "pnpm --filter @syncreeper/sync build",
+        "setup": "pnpm --filter @syncreeper/host-utils setup",
+        "get-device-id": "pnpm --filter @syncreeper/host-utils get-device-id",
+        "add-device": "pnpm --filter @syncreeper/host-utils add-device",
+        "sync-now": "pnpm --filter @syncreeper/host-utils sync-now",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
-        "check": "npm run lint && npm run format:check && npm run build:all"
+        "check": "pnpm run lint && pnpm run format:check && pnpm run build",
+        "clean": "pnpm -r clean"
     },
     "keywords": [
         "pulumi",
@@ -26,24 +27,14 @@
     ],
     "author": "",
     "license": "MIT",
-    "dependencies": {
-        "@pulumi/command": "^1.0.0",
-        "@pulumi/pulumi": "^3.0.0"
-    },
     "devDependencies": {
         "@eslint/js": "^9.0.0",
-        "@inquirer/prompts": "^7.0.0",
-        "@types/node": "^20.0.0",
-        "@types/yargs": "^17.0.35",
         "eslint": "^9.0.0",
         "eslint-config-prettier": "^9.0.0",
         "eslint-plugin-prettier": "^5.0.0",
-        "execa": "^9.0.0",
         "globals": "^15.0.0",
         "prettier": "^3.0.0",
-        "tsx": "^4.0.0",
         "typescript": "^5.0.0",
-        "typescript-eslint": "^8.0.0",
-        "yargs": "^18.0.0"
+        "typescript-eslint": "^8.0.0"
     }
 }
