@@ -18,11 +18,26 @@ import type { SetupGitHubSyncOptions, SetupGitHubSyncResult } from "./types";
 import type { SyncReeperConfig } from "../../config/types";
 
 /**
+ * Gets the project root directory by resolving from the compiled output location.
+ * When Pulumi runs the program, process.cwd() points to the `main` directory
+ * (packages/host/dist), not the project root. We use __dirname to resolve
+ * relative to this file's compiled location instead.
+ *
+ * Compiled path: <root>/packages/host/dist/services/github-sync/linux.js
+ * So __dirname is: <root>/packages/host/dist/services/github-sync
+ * Project root is 5 levels up.
+ */
+function getProjectRoot(): string {
+    return path.resolve(__dirname, "..", "..", "..", "..", "..");
+}
+
+/**
  * Gets the sync app bundle path
  * Throws an error if the bundle doesn't exist, prompting user to build first
  */
 function getSyncAppBundlePath(): string {
-    const bundlePath = path.join(process.cwd(), "packages", "sync", "dist", "bundle.js");
+    const projectRoot = getProjectRoot();
+    const bundlePath = path.join(projectRoot, "packages", "sync", "dist", "bundle.js");
 
     if (!fs.existsSync(bundlePath)) {
         throw new Error(
