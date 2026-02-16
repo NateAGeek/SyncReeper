@@ -2,7 +2,7 @@
 /**
  * Trigger a manual sync on the VPS
  *
- * Run with: npm run sync-now
+ * Run with: pnpm run sync-now
  *
  * Options:
  *   --local      Run locally on the VPS instead of via SSH
@@ -12,15 +12,15 @@
  *   --help       Show help
  *
  * Examples:
- *   npm run sync-now                        # Interactive, connects via SSH
- *   npm run sync-now -- --local             # Local, prompts for follow logs
- *   npm run sync-now -- --local --follow    # Local, follow logs (no prompts)
- *   npm run sync-now -- --local --no-follow # Local, don't follow logs
- *   npm run sync-now -- --user myuser       # Use custom service username
+ *   pnpm run sync-now                        # Interactive, connects via SSH
+ *   pnpm run sync-now -- --local             # Local, prompts for follow logs
+ *   pnpm run sync-now -- --local --follow    # Local, follow logs (no prompts)
+ *   pnpm run sync-now -- --local --no-follow # Local, don't follow logs
+ *   pnpm run sync-now -- --user myuser       # Use custom service username
  *
  * Local Mode (Linux):
  *   - Must be run as the service user (uses user-level systemctl --user)
- *   - Or run via: sudo -u <service-user> npm run sync-now -- --local
+ *   - Or run via: sudo -u <service-user> pnpm run sync-now -- --local
  *
  * Local Mode (macOS):
  *   - Runs directly as current user via sync-repos script
@@ -123,10 +123,10 @@ async function runLocalSync(followLogs: boolean, serviceUser: string): Promise<v
             console.error("");
             console.error("Options:");
             console.error(`  1. Run as ${serviceUser} user:`);
-            console.error(`     sudo -u ${serviceUser} npm run sync-now -- --local`);
+            console.error(`     sudo -u ${serviceUser} pnpm run sync-now -- --local`);
             console.error("");
             console.error("  2. Use SSH mode (without --local):");
-            console.error("     npm run sync-now");
+            console.error("     pnpm run sync-now");
             process.exit(1);
         }
 

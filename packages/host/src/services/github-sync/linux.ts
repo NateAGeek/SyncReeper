@@ -22,12 +22,12 @@ import type { SyncReeperConfig } from "../../config/types";
  * Throws an error if the bundle doesn't exist, prompting user to build first
  */
 function getSyncAppBundlePath(): string {
-    const bundlePath = path.join(process.cwd(), "sync", "dist", "bundle.js");
+    const bundlePath = path.join(process.cwd(), "packages", "sync", "dist", "bundle.js");
 
     if (!fs.existsSync(bundlePath)) {
         throw new Error(
             `Sync app bundle not found at ${bundlePath}. ` +
-                `Please run 'npm run build:all' before deploying.`
+                `Please run 'pnpm run build' before deploying.`
         );
     }
 

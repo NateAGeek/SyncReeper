@@ -34,8 +34,7 @@ SyncReeper solves the problem of keeping a complete, up-to-date backup of all yo
 ```bash
 git clone https://github.com/NateAGeek/SyncReeper.git
 cd SyncReeper
-npm install
-cd sync && npm install && cd ..
+pnpm install
 ```
 
 ### 2. Initialize Pulumi
@@ -45,7 +44,7 @@ cd sync && npm install && cd ..
 pulumi login --local
 
 # Run interactive setup
-npm run setup
+pnpm run setup
 ```
 
 The setup wizard will prompt for:
@@ -58,7 +57,7 @@ The setup wizard will prompt for:
 
 ```bash
 # Build everything first
-npm run build:all
+pnpm run build
 
 # Deploy to VPS
 pulumi up
@@ -120,7 +119,7 @@ systemctl list-timers syncreeper-sync.timer
 You can test the sync application locally without deploying to a VPS:
 
 ```bash
-cd sync
+cd packages/sync
 
 # Copy the example env file
 cp .env.local.example .env.local
@@ -131,11 +130,11 @@ cp .env.local.example .env.local
 # REPOS_PATH=./test-repos
 
 # Build and run
-npm run build
-npm run start:local
+pnpm run build
+pnpm run start:local
 
 # Or for development with hot reload
-npm run dev:local
+pnpm run dev:local
 ```
 
 **Environment Variables:**
@@ -186,54 +185,63 @@ pulumi up
 
 ```
 SyncReeper/
-├── src/                      # Pulumi infrastructure code
-│   ├── index.ts              # Main orchestrator
-│   ├── config/               # Configuration types and loader
-│   ├── lib/                  # Utility functions
-│   ├── resources/            # Base resources (user, directories)
-│   ├── services/             # Service modules
-│   │   ├── firewall/         # UFW configuration
-│   │   ├── sshguard/         # Brute-force protection
-│   │   ├── auto-updates/     # Unattended upgrades
-│   │   ├── github-sync/      # Sync service + timer
-│   │   └── syncthing/        # Syncthing configuration
-│   └── scripts/              # Helper scripts
-│
-├── sync/                     # Standalone sync application
-│   ├── src/
-│   │   ├── index.ts          # Entry point
-│   │   ├── github.ts         # GitHub API client
-│   │   ├── git.ts            # Git operations
-│   │   └── lock.ts           # Lock file handling
-│   ├── .env.local.example    # Example environment file
-│   └── package.json
+├── packages/
+│   ├── host/                     # Pulumi infrastructure code
+│   │   └── src/
+│   │       ├── index.ts          # Main orchestrator
+│   │       ├── config/           # Configuration types and loader
+│   │       ├── lib/              # Utility functions
+│   │       ├── resources/        # Base resources (user, directories)
+│   │       └── services/         # Service modules
+│   │           ├── firewall/     # UFW configuration
+│   │           ├── sshguard/     # Brute-force protection
+│   │           ├── auto-updates/ # Unattended upgrades
+│   │           ├── github-sync/  # Sync service + timer
+│   │           └── syncthing/    # Syncthing configuration
+│   │
+│   ├── sync/                     # Sync application (bundled for deployment)
+│   │   └── src/
+│   │       ├── index.ts          # Entry point
+│   │       ├── github.ts         # GitHub API client
+│   │       ├── git.ts            # Git operations
+│   │       └── lock.ts           # Lock file handling
+│   │
+│   ├── shared/                   # Shared types and utilities
+│   │   └── src/
+│   │       ├── platform.ts       # Platform detection
+│   │       └── config.ts         # Configuration types
+│   │
+│   ├── host-utils/               # CLI utilities (setup, sync-now, etc.)
+│   │   └── src/
+│   │       ├── setup.ts          # Interactive setup wizard
+│   │       ├── sync-now.ts       # Manual sync trigger
+│   │       ├── add-device.ts     # Add Syncthing device
+│   │       └── get-device-id.ts  # Get Syncthing device ID
+│   │
+│   └── node-passthrough/         # Node passthrough service
 │
 ├── package.json
-├── tsconfig.json
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
 ├── eslint.config.js
 └── Pulumi.yaml
 ```
 
 ## Scripts
 
-| Script               | Description                          |
-| -------------------- | ------------------------------------ |
-| `npm run build`      | Build Pulumi infrastructure          |
-| `npm run build:sync` | Build sync application               |
-| `npm run build:all`  | Build everything                     |
-| `npm run lint`       | Run ESLint                           |
-| `npm run lint:fix`   | Fix ESLint issues                    |
-| `npm run format`     | Format with Prettier                 |
-| `npm run check`      | Run all checks (lint, format, build) |
-
-### Sync App Scripts (from `sync/` directory)
-
-| Script                | Description                        |
-| --------------------- | ---------------------------------- |
-| `npm run build`       | Build the sync application         |
-| `npm run start`       | Run with system environment        |
-| `npm run start:local` | Run with `.env.local` file         |
-| `npm run dev:local`   | Development mode with `.env.local` |
+| Script                   | Description                          |
+| ------------------------ | ------------------------------------ |
+| `pnpm run build`         | Build all packages                   |
+| `pnpm run build:host`    | Build shared + host packages         |
+| `pnpm run build:sync`    | Build sync application               |
+| `pnpm run lint`          | Run ESLint                           |
+| `pnpm run lint:fix`      | Fix ESLint issues                    |
+| `pnpm run format`        | Format with Prettier                 |
+| `pnpm run check`         | Run all checks (lint, format, build) |
+| `pnpm run setup`         | Run interactive setup wizard         |
+| `pnpm run sync-now`      | Trigger a manual sync                |
+| `pnpm run get-device-id` | Get Syncthing device ID              |
+| `pnpm run add-device`    | Add a Syncthing device               |
 
 ## Security Model
 
@@ -326,5 +334,5 @@ MIT
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run `npm run check` to verify
+4. Run `pnpm run check` to verify
 5. Submit a pull request

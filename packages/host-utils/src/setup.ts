@@ -3,7 +3,7 @@
  * Interactive Setup Script for SyncReeper
  *
  * Prompts for configuration values and sets them in Pulumi config.
- * Run with: npm run setup
+ * Run with: pnpm run setup
  */
 
 import * as os from "node:os";

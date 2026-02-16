@@ -2,7 +2,7 @@
 /**
  * Get the Syncthing device ID from a running VPS
  *
- * Run with: npm run get-device-id
+ * Run with: pnpm run get-device-id
  *
  * Options:
  *   --local  Run locally on the VPS instead of via SSH
@@ -10,9 +10,9 @@
  *   --help   Show help
  *
  * Examples:
- *   npm run get-device-id                    # Interactive, connects via SSH
- *   npm run get-device-id -- --local         # Run directly on the VPS
- *   npm run get-device-id -- --user myuser   # Use custom service username
+ *   pnpm run get-device-id                    # Interactive, connects via SSH
+ *   pnpm run get-device-id -- --local         # Run directly on the VPS
+ *   pnpm run get-device-id -- --user myuser   # Use custom service username
  *
  * Local Mode Access:
  *   - Linux: requires membership in the service user's group to read config

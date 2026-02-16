@@ -2,7 +2,7 @@
 /**
  * Add a device to Syncthing on the VPS
  *
- * Run with: npm run add-device
+ * Run with: pnpm run add-device
  *
  * Options:
  *   --local       Run locally on the VPS instead of via SSH
@@ -13,11 +13,11 @@
  *   --help        Show help
  *
  * Examples:
- *   npm run add-device                                    # Fully interactive
- *   npm run add-device -- --local                         # Local, prompts for device info
- *   npm run add-device -- --local --device-id "ABC..."    # Local, partial args
- *   npm run add-device -- --local --device-id "ABC..." --name "Laptop" --folder repos  # Fully scripted
- *   npm run add-device -- --user myuser                   # Use custom service username
+ *   pnpm run add-device                                    # Fully interactive
+ *   pnpm run add-device -- --local                         # Local, prompts for device info
+ *   pnpm run add-device -- --local --device-id "ABC..."    # Local, partial args
+ *   pnpm run add-device -- --local --device-id "ABC..." --name "Laptop" --folder repos  # Fully scripted
+ *   pnpm run add-device -- --user myuser                   # Use custom service username
  *
  * Local Mode Access (Linux):
  *   - As the service user: runs directly
@@ -241,7 +241,7 @@ async function main(): Promise<void> {
                 if (username !== serviceUser && username !== "root") {
                     console.error(`  3. You are in the '${serviceUser}' group (run: groups)`);
                     console.error(
-                        `     Or run as: sudo -u ${serviceUser} npm run add-device -- --local`
+                        `     Or run as: sudo -u ${serviceUser} pnpm run add-device -- --local`
                     );
                 }
             }
