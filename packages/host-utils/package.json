@@ -2,6 +2,7 @@
     "name": "@syncreeper/host-utils",
     "version": "1.0.0",
     "description": "CLI utility scripts for managing SyncReeper deployments",
+    "type": "module",
     "bin": {
         "syncreeper-setup": "src/setup.ts",
         "syncreeper-get-device-id": "src/get-device-id.ts",
