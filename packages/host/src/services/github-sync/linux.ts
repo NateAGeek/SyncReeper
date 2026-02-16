@@ -354,7 +354,8 @@ export function setupGitHubSyncLinux(options: SetupGitHubSyncOptions): SetupGitH
 
     // Step 15: Verify timer is active
     const uidCmd = `$(id -u ${username})`;
-    const envPrefix = `sudo -u ${username} XDG_RUNTIME_DIR=/run/user/${uidCmd}`;
+    const runtimeDir = `/run/user/${uidCmd}`;
+    const envPrefix = `sudo -u ${username} XDG_RUNTIME_DIR=${runtimeDir} DBUS_SESSION_BUS_ADDRESS=unix:path=${runtimeDir}/bus`;
     const verifyTimer = runCommand({
         name: "verify-sync-timer",
         create: `
