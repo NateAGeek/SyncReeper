@@ -30,9 +30,16 @@ export async function fetchRepositories(options: GitHubClientOptions): Promise<R
     console.log(`Fetching repositories for user: ${username}`);
 
     const repositories: Repository[] = [];
+    let archivedCount = 0;
+    let privateCount = 0;
 
     // Fetch all repositories the user has access to (including private)
     // Using pagination to handle users with many repos
+    //
+    // Note: Fine-grained PATs (github_pat_*) only have access to repos
+    // explicitly granted during token creation. If repos are missing,
+    // check the token's repository permissions at:
+    // https://github.com/settings/tokens
     for await (const response of octokit.paginate.iterator(octokit.repos.listForAuthenticatedUser, {
         visibility: "all",
         affiliation: "owner,collaborator,organization_member",
@@ -42,8 +49,13 @@ export async function fetchRepositories(options: GitHubClientOptions): Promise<R
         for (const repo of response.data) {
             // Skip archived repositories
             if (repo.archived) {
+                archivedCount++;
                 console.log(`  Skipping archived: ${repo.full_name}`);
                 continue;
+            }
+
+            if (repo.private) {
+                privateCount++;
             }
 
             repositories.push({
@@ -58,6 +70,8 @@ export async function fetchRepositories(options: GitHubClientOptions): Promise<R
         }
     }
 
-    console.log(`Found ${repositories.length} non-archived repositories`);
+    console.log(
+        `Found ${repositories.length} non-archived repositories (${privateCount} private, ${archivedCount} archived skipped)`
+    );
     return repositories;
 }

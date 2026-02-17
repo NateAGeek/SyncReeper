@@ -16,7 +16,7 @@ export interface SyncOptions {
 
 export interface SyncResult {
     repository: string;
-    action: "cloned" | "updated" | "unchanged" | "error";
+    action: "cloned" | "updated" | "unchanged" | "skipped" | "error";
     message: string;
 }
 
@@ -98,15 +98,59 @@ async function updateRepository(
         const authUrl = getAuthenticatedUrl(repo.cloneUrl, token);
         await git.remote(["set-url", "origin", authUrl]);
 
-        // Fetch latest changes
-        await git.fetch(["origin", repo.defaultBranch, "--depth=1"]);
+        // Fetch all remote refs instead of a specific branch.
+        // The GitHub API reports a defaultBranch, but the local clone may
+        // have been created with a different branch, or the remote's default
+        // branch may have been renamed (e.g. master → main). Fetching all
+        // refs avoids "couldn't find remote ref" errors.
+        await git.fetch(["origin", "--depth=1"]);
+
+        // Determine the branch to track: prefer the GitHub-reported default
+        // branch, but fall back to whatever branch is currently checked out.
+        let targetBranch = repo.defaultBranch;
+        try {
+            // Check if the expected remote branch exists
+            await git.raw(["rev-parse", "--verify", `origin/${targetBranch}`]);
+        } catch {
+            // Remote branch not found - try the currently checked-out branch
+            try {
+                const currentBranch = (await git.revparse(["--abbrev-ref", "HEAD"])).trim();
+                if (currentBranch && currentBranch !== "HEAD") {
+                    targetBranch = currentBranch;
+                }
+            } catch {
+                // Ignore - we'll try with the original targetBranch
+            }
+        }
 
         // Check if we're behind
         const status = await git.status();
 
+        // Skip repos with local modifications to avoid destroying in-progress work.
+        // Checks tracked file changes (modified, staged) and local commits ahead of origin.
+        // Untracked files are ignored — they survive a hard reset.
+        const isDirty = status.modified.length > 0 || status.staged.length > 0 || status.ahead > 0;
+
+        if (isDirty) {
+            // Restore non-authenticated URL before skipping
+            await git.remote(["set-url", "origin", repo.cloneUrl]);
+
+            const reasons: string[] = [];
+            if (status.modified.length > 0)
+                reasons.push(`${status.modified.length} modified file(s)`);
+            if (status.staged.length > 0) reasons.push(`${status.staged.length} staged file(s)`);
+            if (status.ahead > 0) reasons.push(`${status.ahead} local commit(s) ahead`);
+
+            return {
+                repository: repo.fullName,
+                action: "skipped",
+                message: `Skipped: local changes detected (${reasons.join(", ")})`,
+            };
+        }
+
         if (status.behind > 0) {
             // Reset to origin's HEAD
-            await git.reset(["--hard", `origin/${repo.defaultBranch}`]);
+            await git.reset(["--hard", `origin/${targetBranch}`]);
 
             // Restore non-authenticated URL
             await git.remote(["set-url", "origin", repo.cloneUrl]);

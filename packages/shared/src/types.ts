@@ -34,6 +34,23 @@ export interface SSHConfig {
 }
 
 /**
+ * Passthrough tunnel configuration
+ *
+ * When enabled, a dedicated 'passthrough' user is created on the VPS
+ * that accepts reverse SSH tunnels from the home machine (e.g., Mac Mini).
+ * This allows SSH access to the home machine from the VPS without
+ * exposing any ports on the home network.
+ */
+export interface PassthroughConfig {
+    /** Whether passthrough tunnel is enabled */
+    enabled: boolean;
+    /** Port on VPS for the reverse tunnel (default: 2222) */
+    tunnelPort: number;
+    /** Authorized public keys for the passthrough user */
+    authorizedKeys: string[];
+}
+
+/**
  * Sync schedule and paths configuration
  */
 export interface SyncConfig {
@@ -53,6 +70,8 @@ export interface SyncReeperConfig {
     sync: SyncConfig;
     /** The configured service username */
     serviceUser: string;
+    /** Optional passthrough tunnel configuration */
+    passthrough?: PassthroughConfig;
 }
 
 /**

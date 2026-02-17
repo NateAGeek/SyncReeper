@@ -18,6 +18,8 @@ import { getServiceUser } from "../../config/types";
 export interface SetupSSHOptions {
     /** List of authorized SSH public keys for the syncreeper user */
     authorizedKeys: string[];
+    /** Whether the passthrough tunnel user is enabled (adds to AllowUsers) */
+    passthroughEnabled?: boolean;
     /** Resources to depend on (should include packages and user creation) */
     dependsOn?: pulumi.Resource[];
 }
@@ -33,8 +35,14 @@ export interface SetupSSHResult {
  *
  * Lazy getter to avoid calling getServiceUser() at module evaluation time,
  * which would crash when imported in test environments without Pulumi config.
+ *
+ * @param passthroughEnabled - When true, adds 'passthrough' to AllowUsers
  */
-export function getSSHDHardeningConfig() {
+export function getSSHDHardeningConfig(passthroughEnabled = false) {
+    const allowUsers = passthroughEnabled
+        ? `${getServiceUser().name} passthrough`
+        : getServiceUser().name;
+
     return {
         // Authentication
         permitRootLogin: "no",
@@ -44,7 +52,7 @@ export function getSSHDHardeningConfig() {
         maxAuthTries: 3,
 
         // User restrictions
-        allowUsers: getServiceUser().name,
+        allowUsers,
 
         // Session security
         clientAliveInterval: 300,
@@ -64,9 +72,11 @@ export function getSSHDHardeningConfig() {
 
 /**
  * Generates the sshd_config.d drop-in file content
+ *
+ * @param passthroughEnabled - When true, adds 'passthrough' to AllowUsers
  */
-export function generateSSHDConfig(): string {
-    const SSHD_HARDENING_CONFIG = getSSHDHardeningConfig();
+export function generateSSHDConfig(passthroughEnabled = false): string {
+    const SSHD_HARDENING_CONFIG = getSSHDHardeningConfig(passthroughEnabled);
     const lines = [
         "# SyncReeper SSH Hardening Configuration",
         "# Managed by Pulumi - Do not edit manually",
@@ -130,7 +140,7 @@ export function generateAuthorizedKeys(keys: string[]): string {
  * - SSH keys must be configured in Pulumi config
  */
 export function setupSSH(options: SetupSSHOptions): SetupSSHResult {
-    const { authorizedKeys, dependsOn = [] } = options;
+    const { authorizedKeys, passthroughEnabled = false, dependsOn = [] } = options;
     const resources: pulumi.Resource[] = [];
 
     // Validate we have at least one SSH key
@@ -143,7 +153,7 @@ export function setupSSH(options: SetupSSHOptions): SetupSSHResult {
 
     // Create sshd_config.d drop-in file for hardening
     // Using 99- prefix to ensure it's applied last and overrides other configs
-    const sshdConfigContent = generateSSHDConfig();
+    const sshdConfigContent = generateSSHDConfig(passthroughEnabled);
     const sshdConfig = writeFile({
         name: "sshd-hardening-config",
         path: "/etc/ssh/sshd_config.d/99-syncreeper-hardening.conf",

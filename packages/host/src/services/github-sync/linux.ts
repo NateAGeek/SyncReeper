@@ -156,6 +156,10 @@ if [ "$CURRENT_USER" != "${username}" ]; then
     exit 1
 fi
 
+# Set up the user D-Bus session environment for systemctl --user
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=\${XDG_RUNTIME_DIR}/bus"
+
 echo "Starting manual sync..."
 systemctl --user start syncreeper-sync.service
 

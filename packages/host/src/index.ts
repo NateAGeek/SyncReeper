@@ -40,6 +40,7 @@ import { setupSSHGuard } from "./services/sshguard/index";
 import { setupAutoUpdates } from "./services/auto-updates/index";
 import { setupGitHubSync } from "./services/github-sync/index";
 import { setupSyncthing } from "./services/syncthing/index";
+import { setupPassthrough } from "./services/passthrough/index";
 
 // ============================================================================
 // Platform Check and Banner
@@ -101,6 +102,7 @@ const _firewall = setupFirewall({
 if (isLinux()) {
     const _ssh = setupSSH({
         authorizedKeys: config.ssh.authorizedKeys,
+        passthroughEnabled: config.passthrough?.enabled ?? false,
         dependsOn: [serviceUser.resource, ...packages.resources],
     });
 } else {
@@ -135,6 +137,20 @@ const _syncthing = setupSyncthing({
 });
 
 // ============================================================================
+// Phase 5: Passthrough Tunnel (optional)
+// ============================================================================
+
+// Setup reverse SSH tunnel passthrough (Linux VPS only, when enabled)
+const passthroughEnabled = config.passthrough?.enabled ?? false;
+if (passthroughEnabled && config.passthrough) {
+    const _passthrough = setupPassthrough({
+        authorizedKeys: config.passthrough.authorizedKeys,
+        tunnelPort: config.passthrough.tunnelPort,
+        dependsOn: [serviceUser.resource, ...packages.resources],
+    });
+}
+
+// ============================================================================
 // Exports
 // ============================================================================
 
@@ -143,6 +159,19 @@ function getPostDeploymentInstructions(): string {
     const username = serviceUser.username;
 
     if (isLinux()) {
+        const passthroughInstructions = passthroughEnabled
+            ? `
+5. PASSTHROUGH TUNNEL:
+   A reverse SSH tunnel is configured for remote access to your home machine.
+   
+   From this VPS, connect to your home machine:
+   ssh <your-mac-user>@localhost -p ${config.passthrough?.tunnelPort ?? 2222}
+   
+   The home machine must be running the passthrough tunnel client.
+   Set it up with: npx @syncreeper/node-passthrough setup
+`
+            : "";
+
         return `
 ================================================================================
 DEPLOYMENT COMPLETE - Linux VPS - Next Steps:
@@ -151,7 +180,7 @@ DEPLOYMENT COMPLETE - Linux VPS - Next Steps:
 IMPORTANT: SSH ACCESS HAS BEEN HARDENED
 - Password authentication is DISABLED
 - Root login is DISABLED  
-- Only the '${username}' user can SSH in
+- Only the '${username}' user can SSH in${passthroughEnabled ? "\n- The 'passthrough' tunnel user is also allowed (tunnel-only, no shell)" : ""}
 - Connect with: ssh ${username}@your-vps
 
 1. TRIGGER INITIAL SYNC (required):
@@ -177,7 +206,7 @@ IMPORTANT: SSH ACCESS HAS BEEN HARDENED
    - Open Syncthing on your other devices
    - Add the VPS device using its device ID
    - Share the "repos" folder with it
-
+${passthroughInstructions}
 ================================================================================
 `;
     }
@@ -219,7 +248,7 @@ function getCommands(): Record<string, string> {
     const username = serviceUser.username;
 
     if (isLinux()) {
-        return {
+        const commands: Record<string, string> = {
             triggerSync: "sudo systemctl start syncreeper-sync.service",
             viewSyncLogs: "journalctl -u syncreeper-sync -f",
             getDeviceId: "syncreeper-device-id",
@@ -228,6 +257,13 @@ function getCommands(): Record<string, string> {
             checkSyncthing: `systemctl status syncthing@${username}`,
             checkSyncTimer: "systemctl list-timers syncreeper-sync.timer",
         };
+
+        if (passthroughEnabled) {
+            commands.connectToHome = `ssh <your-mac-user>@localhost -p ${config.passthrough?.tunnelPort ?? 2222}`;
+            commands.checkPassthroughUser = "id passthrough";
+        }
+
+        return commands;
     }
 
     // macOS commands

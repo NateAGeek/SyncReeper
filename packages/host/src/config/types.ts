@@ -23,6 +23,7 @@ export type {
     ServiceUserConfig,
     PathsConfig,
     DefaultConfig,
+    PassthroughConfig,
 } from "@syncreeper/shared";
 
 // Re-export DEFAULT_SERVICE_USER_LINUX for scripts that need it

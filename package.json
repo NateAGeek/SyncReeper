@@ -11,6 +11,7 @@
         "get-device-id": "pnpm --filter @syncreeper/host-utils run get-device-id",
         "add-device": "pnpm --filter @syncreeper/host-utils run add-device",
         "sync-now": "pnpm --filter @syncreeper/host-utils run sync-now",
+        "redeploy": "pnpm --filter @syncreeper/host-utils run redeploy",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",

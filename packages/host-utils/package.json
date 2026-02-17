@@ -7,13 +7,15 @@
         "syncreeper-setup": "src/setup.ts",
         "syncreeper-get-device-id": "src/get-device-id.ts",
         "syncreeper-add-device": "src/add-device.ts",
-        "syncreeper-sync-now": "src/sync-now.ts"
+        "syncreeper-sync-now": "src/sync-now.ts",
+        "syncreeper-redeploy": "src/redeploy.ts"
     },
     "scripts": {
         "setup": "tsx src/setup.ts",
         "get-device-id": "tsx src/get-device-id.ts",
         "add-device": "tsx src/add-device.ts",
-        "sync-now": "tsx src/sync-now.ts"
+        "sync-now": "tsx src/sync-now.ts",
+        "redeploy": "tsx src/redeploy.ts"
     },
     "dependencies": {
         "@inquirer/prompts": "^7.0.0",

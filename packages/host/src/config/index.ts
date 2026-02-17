@@ -10,6 +10,7 @@ import {
     type SyncthingConfig,
     type SSHConfig,
     type SyncConfig,
+    type PassthroughConfig,
     DEFAULT_CONFIG,
     getServiceUser,
     setConfiguredUsername,
@@ -51,12 +52,23 @@ export function getConfig(): SyncReeperConfig {
         reposPath: config.get("repos-path") ?? DEFAULT_CONFIG.reposPath,
     };
 
+    // Passthrough tunnel configuration (optional)
+    const passthroughEnabled = config.getBoolean("passthrough-enabled") ?? false;
+    const passthrough: PassthroughConfig | undefined = passthroughEnabled
+        ? {
+              enabled: true,
+              tunnelPort: config.getNumber("passthrough-port") ?? 2222,
+              authorizedKeys: config.requireObject<string[]>("passthrough-authorized-keys"),
+          }
+        : undefined;
+
     return {
         github,
         syncthing,
         ssh,
         sync,
         serviceUser: resolvedUser.name,
+        passthrough,
     };
 }
 

@@ -48,6 +48,7 @@ function printSummary(results: SyncResult[]): void {
     const cloned = results.filter((r) => r.action === "cloned").length;
     const updated = results.filter((r) => r.action === "updated").length;
     const unchanged = results.filter((r) => r.action === "unchanged").length;
+    const skippedResults = results.filter((r) => r.action === "skipped");
     const errors = results.filter((r) => r.action === "error");
 
     console.log("\n=== Sync Summary ===");
@@ -55,7 +56,15 @@ function printSummary(results: SyncResult[]): void {
     console.log(`  Cloned: ${cloned}`);
     console.log(`  Updated: ${updated}`);
     console.log(`  Unchanged: ${unchanged}`);
+    console.log(`  Skipped: ${skippedResults.length}`);
     console.log(`  Errors: ${errors.length}`);
+
+    if (skippedResults.length > 0) {
+        console.log("\nSkipped (local changes detected):");
+        for (const s of skippedResults) {
+            console.log(`  ${s.repository}: ${s.message}`);
+        }
+    }
 
     if (errors.length > 0) {
         console.log("\nErrors:");
