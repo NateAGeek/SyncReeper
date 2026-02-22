@@ -13,6 +13,7 @@
 import { fetchRepositories } from "./github.js";
 import { syncAllRepositories, type SyncResult } from "./git.js";
 import { acquireLock } from "./lock.js";
+import { updateStignoreIncludes } from "./stignore.js";
 
 interface Config {
     githubToken: string;
@@ -114,6 +115,10 @@ async function main(): Promise<void> {
 
         // Print summary
         printSummary(results);
+
+        // Update .stignore with per-repo .gitignore patterns
+        console.log("\nUpdating .stignore with per-repo .gitignore patterns...");
+        await updateStignoreIncludes(config.reposPath);
 
         // Exit with error if any repos failed
         const hasErrors = results.some((r) => r.action === "error");

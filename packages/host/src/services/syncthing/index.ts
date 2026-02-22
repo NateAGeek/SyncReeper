@@ -39,4 +39,8 @@ export function setupSyncthing(options: SetupSyncthingOptions): SetupSyncthingRe
 // Re-export platform-specific functions for direct use when needed
 export { setupSyncthingLinux } from "./linux";
 export { setupSyncthingDarwin } from "./darwin";
-export { generateStignoreContent } from "./stignore";
+export {
+    generateStignoreContent,
+    GITIGNORE_SECTION_START,
+    GITIGNORE_SECTION_END,
+} from "./stignore";
