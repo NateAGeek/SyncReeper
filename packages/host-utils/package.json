@@ -1,7 +1,8 @@
 {
     "name": "@syncreeper/host-utils",
     "version": "1.0.0",
-    "description": "CLI utility scripts for managing SyncReeper deployments",
+    "deprecated": "Use @syncreeper/cli instead. This package has been superseded by the unified syncreeper CLI.",
+    "description": "[DEPRECATED] CLI utility scripts — use @syncreeper/cli instead",
     "type": "module",
     "bin": {
         "syncreeper-setup": "src/setup.ts",

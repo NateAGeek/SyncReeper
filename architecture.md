@@ -23,8 +23,10 @@ SyncReeper is organized as a **pnpm workspaces monorepo** with 5 packages:
 | **@syncreeper/shared**           | `packages/shared/`           | CommonJS          | Platform detection utilities and shared type interfaces                  |
 | **@syncreeper/host**             | `packages/host/`             | CommonJS (Pulumi) | Pulumi infrastructure code — provisions and configures the system        |
 | **@syncreeper/sync**             | `packages/sync/`             | ESM (Node.js)     | Standalone app that fetches GitHub repos and clones/updates them locally |
-| **@syncreeper/host-utils**       | `packages/host-utils/`       | CommonJS          | CLI scripts for managing deployments (setup wizard, device management)   |
+| **@syncreeper/cli**              | `packages/cli/`              | ESM               | Unified CLI (`syncreeper` command) — setup, device mgmt, redeploy, TUI   |
+| **@syncreeper/tui**              | `packages/tui/`              | ESM               | Ink/React terminal dashboard with tabbed views for monitoring            |
 | **@syncreeper/node-passthrough** | `packages/node-passthrough/` | ESM               | (Scaffold) VPS traffic proxy via WireGuard tunnel to host                |
+| ~~@syncreeper/host-utils~~       | `packages/host-utils/`       | _(deprecated)_    | Superseded by `@syncreeper/cli`                                          |
 
 The infrastructure code deploys the sync application as a bundled `bundle.js` file to the target system and sets up a timer/scheduler to run it daily.
 
@@ -98,15 +100,51 @@ SyncReeper/
 │   │       ├── git.ts                  # Git operations (clone/update with authenticated URLs)
 │   │       └── lock.ts                 # Lock file handling (proper-lockfile, 10-min stale timeout)
 │   │
-│   ├── host-utils/                     # @syncreeper/host-utils — CLI SCRIPTS
-│   │   ├── package.json                # Deps: @inquirer/prompts, yargs, execa, @syncreeper/shared
-│   │   │                               # bin entries for each script, runs via tsx (no build step)
-│   │   ├── tsconfig.json               # Extends base, CommonJS module
+│   ├── host-utils/                     # @syncreeper/host-utils — DEPRECATED (use cli instead)
+│   │   ├── package.json                # Deprecated — commands migrated to @syncreeper/cli
+│   │   ├── tsconfig.json
 │   │   └── src/
-│   │       ├── setup.ts                # Interactive setup wizard (@inquirer/prompts)
-│   │       ├── get-device-id.ts        # CLI to get Syncthing device ID
-│   │       ├── add-device.ts           # CLI to add a Syncthing device
-│   │       └── sync-now.ts             # CLI to trigger manual sync
+│   │       ├── setup.ts                # (legacy) Interactive setup wizard
+│   │       ├── get-device-id.ts        # (legacy) CLI to get Syncthing device ID
+│   │       ├── add-device.ts           # (legacy) CLI to add a Syncthing device
+│   │       └── sync-now.ts             # (legacy) CLI to trigger manual sync
+│   │
+│   ├── cli/                            # @syncreeper/cli — UNIFIED CLI
+│   │   ├── package.json                # ESM, bin: "syncreeper", deps: yargs, ink, @syncreeper/tui
+│   │   ├── tsconfig.json               # Extends base, NodeNext module, react-jsx
+│   │   └── src/
+│   │       ├── index.ts                # Entry point: yargs with subcommands, defaults to dashboard
+│   │       ├── utils/
+│   │       │   └── service-user.ts     # Shared getDefaultServiceUser() utility
+│   │       └── commands/
+│   │           ├── setup.ts            # Interactive setup wizard (@inquirer/prompts)
+│   │           ├── get-device-id.ts    # Get Syncthing device ID
+│   │           ├── add-device.ts       # Add a Syncthing device
+│   │           ├── sync-now.ts         # Trigger manual sync
+│   │           ├── redeploy.ts         # Redeploy sync bundle
+│   │           └── dashboard.ts        # Launch TUI dashboard
+│   │
+│   ├── tui/                            # @syncreeper/tui — TERMINAL DASHBOARD
+│   │   ├── package.json                # ESM, deps: ink, react
+│   │   ├── tsconfig.json               # Extends base, NodeNext module, react-jsx
+│   │   └── src/
+│   │       ├── index.tsx               # Ink render entry point
+│   │       ├── App.tsx                 # Root component with tab navigation
+│   │       ├── components/
+│   │       │   ├── TabBar.tsx          # Tab header with keyboard navigation
+│   │       │   ├── LogViewer.tsx       # Scrollable log viewer with j/k keys
+│   │       │   ├── StatusBadge.tsx     # Colored status indicators
+│   │       │   └── KeyHints.tsx        # Keyboard shortcut hints bar
+│   │       ├── hooks/
+│   │       │   ├── useKeyboard.ts      # Global key handler (Tab/Shift-Tab/q/r)
+│   │       │   ├── useServiceStatus.ts # Polls systemctl/launchctl status
+│   │       │   └── useLogs.ts          # Streams journalctl/log output
+│   │       └── tabs/
+│   │           ├── OverviewTab.tsx      # Service status overview
+│   │           ├── GithubSyncTab.tsx    # GitHub sync logs and status
+│   │           ├── SyncthingTab.tsx     # Syncthing status and connections
+│   │           ├── PassthroughTab.tsx   # Node passthrough status
+│   │           └── SecurityTab.tsx      # UFW/firewall rules viewer
 │   │
 │   └── node-passthrough/               # @syncreeper/node-passthrough — TRAFFIC PROXY (scaffold)
 │       ├── package.json                # ESM, private, v0.1.0, deps: @syncreeper/shared
@@ -123,8 +161,10 @@ SyncReeper/
 @syncreeper/shared          (no internal deps)
     ↑
     ├── @syncreeper/host          (+ @pulumi/pulumi, @pulumi/command)
-    ├── @syncreeper/host-utils    (+ @inquirer/prompts, yargs, execa)
+    ├── @syncreeper/cli           (+ @inquirer/prompts, yargs, execa, @syncreeper/tui)
     └── @syncreeper/node-passthrough
+
+@syncreeper/tui                  (+ ink, react — consumed by @syncreeper/cli)
 
 @syncreeper/sync                 (independent — @octokit/rest, simple-git, proper-lockfile)
 ```
@@ -133,7 +173,7 @@ SyncReeper/
 
 ## Shared Library (`packages/shared/`)
 
-Provides platform detection and shared types consumed by `host`, `host-utils`, and `node-passthrough`. Has no runtime dependencies.
+Provides platform detection and shared types consumed by `host`, `cli`, and `node-passthrough`. Has no runtime dependencies.
 
 ### Platform Detection (`src/platform.ts`)
 
@@ -324,8 +364,10 @@ The GitHub sync service runs as a user-level systemd service (`systemctl --user`
 
 - **@syncreeper/shared** and **@syncreeper/host** use CommonJS (Pulumi requires CJS)
 - **@syncreeper/sync** uses ESM with Rollup bundling to a single `bundle.js`
-- **@syncreeper/host-utils** uses CommonJS (runs scripts directly via `tsx`, no build step)
+- **@syncreeper/cli** uses ESM (NodeNext) — unified CLI with `syncreeper` global command
+- **@syncreeper/tui** uses ESM (NodeNext) with React JSX — Ink terminal dashboard
 - **@syncreeper/node-passthrough** uses ESM (NodeNext)
+- ~~@syncreeper/host-utils~~ — deprecated, replaced by `@syncreeper/cli`
 
 ### Root Scripts
 
@@ -336,10 +378,12 @@ The root `package.json` provides workspace-level scripts:
 | `build`         | `pnpm -r build`                                          | Build all packages                  |
 | `build:host`    | `pnpm --filter shared build && pnpm --filter host build` | Build shared + host only            |
 | `build:sync`    | `pnpm --filter @syncreeper/sync build`                   | Build sync package only             |
-| `setup`         | `pnpm --filter @syncreeper/host-utils setup`             | Run interactive setup wizard        |
-| `get-device-id` | `pnpm --filter @syncreeper/host-utils get-device-id`     | Get Syncthing device ID             |
-| `add-device`    | `pnpm --filter @syncreeper/host-utils add-device`        | Add a Syncthing device              |
-| `sync-now`      | `pnpm --filter @syncreeper/host-utils sync-now`          | Trigger manual sync                 |
+| `setup`         | `pnpm --filter @syncreeper/cli setup`                    | Run interactive setup wizard        |
+| `get-device-id` | `pnpm --filter @syncreeper/cli get-device-id`            | Get Syncthing device ID             |
+| `add-device`    | `pnpm --filter @syncreeper/cli add-device`               | Add a Syncthing device              |
+| `sync-now`      | `pnpm --filter @syncreeper/cli sync-now`                 | Trigger manual sync                 |
+| `redeploy`      | `pnpm --filter @syncreeper/cli redeploy`                 | Redeploy sync bundle                |
+| `dashboard`     | `pnpm --filter @syncreeper/cli dashboard`                | Open TUI dashboard                  |
 | `lint`          | `eslint .`                                               | Lint all packages                   |
 | `format`        | `prettier --write .`                                     | Format all files                    |
 | `check`         | `lint && format:check && build`                          | Full CI check (lint, format, build) |
@@ -349,18 +393,20 @@ The root `package.json` provides workspace-level scripts:
 
 ## Technologies & Dependencies
 
-| Dependency            | Package                            | Purpose                                                    |
-| --------------------- | ---------------------------------- | ---------------------------------------------------------- |
-| `@pulumi/pulumi`      | host                               | Infrastructure-as-Code framework                           |
-| `@pulumi/command`     | host                               | Execute local shell commands as Pulumi resources           |
-| `@octokit/rest`       | sync                               | GitHub REST API client for fetching repositories           |
-| `simple-git`          | sync                               | Node.js Git client for clone and fetch operations          |
-| `proper-lockfile`     | sync                               | File-based locking to prevent concurrent sync runs         |
-| `@inquirer/prompts`   | host-utils                         | Interactive CLI prompts for the setup wizard               |
-| `yargs`               | host-utils                         | CLI argument parsing for helper scripts                    |
-| `execa`               | host-utils                         | Process execution for helper scripts                       |
-| `tsx`                 | host-utils, sync, node-passthrough | TypeScript execution without compilation step              |
-| `rollup`              | sync (devDep)                      | Bundles the sync application into a single deployable file |
-| `typescript`          | all (devDep)                       | Type-safe development across all packages                  |
-| `eslint` + `prettier` | root (devDep)                      | Code quality and formatting (flat config)                  |
-| `pnpm`                | root                               | Workspace-aware package manager                            |
+| Dependency            | Package                          | Purpose                                                    |
+| --------------------- | -------------------------------- | ---------------------------------------------------------- |
+| `@pulumi/pulumi`      | host                             | Infrastructure-as-Code framework                           |
+| `@pulumi/command`     | host                             | Execute local shell commands as Pulumi resources           |
+| `@octokit/rest`       | sync                             | GitHub REST API client for fetching repositories           |
+| `simple-git`          | sync                             | Node.js Git client for clone and fetch operations          |
+| `proper-lockfile`     | sync                             | File-based locking to prevent concurrent sync runs         |
+| `@inquirer/prompts`   | cli                              | Interactive CLI prompts for the setup wizard               |
+| `yargs`               | cli                              | CLI argument parsing and subcommand routing                |
+| `execa`               | cli                              | Process execution for helper scripts                       |
+| `ink`                 | cli, tui                         | React-based terminal UI framework                          |
+| `react`               | cli, tui                         | Component model for the TUI dashboard                      |
+| `tsx`                 | cli, tui, sync, node-passthrough | TypeScript execution without compilation step              |
+| `rollup`              | sync (devDep)                    | Bundles the sync application into a single deployable file |
+| `typescript`          | all (devDep)                     | Type-safe development across all packages                  |
+| `eslint` + `prettier` | root (devDep)                    | Code quality and formatting (flat config)                  |
+| `pnpm`                | root                             | Workspace-aware package manager                            |

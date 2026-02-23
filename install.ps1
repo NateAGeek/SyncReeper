@@ -203,6 +203,13 @@ function Main {
     Write-Success "Project built successfully"
     
     Write-Host ""
+    Write-Info "Linking syncreeper CLI globally..."
+    Push-Location packages/cli
+    pnpm link --global
+    Pop-Location
+    Write-Success "syncreeper command is now available globally"
+    
+    Write-Host ""
     Write-Info "Running lint and format checks..."
     pnpm run check
     Write-Success "All checks passed"

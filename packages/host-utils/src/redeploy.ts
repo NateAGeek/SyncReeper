@@ -37,6 +37,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { input } from "@inquirer/prompts";
@@ -111,11 +112,11 @@ async function parseArgs(): Promise<Args> {
 /**
  * Resolve the project root by walking up from this script's location.
  *
- * When run via `tsx`, __dirname is the source location:
- *   <root>/packages/host-utils/src/
- * So the project root is 3 levels up.
+ * This file lives at <root>/packages/host-utils/src/redeploy.ts,
+ * so the project root is 3 levels up from the directory containing this file.
  */
 function getProjectRoot(): string {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
     return path.resolve(__dirname, "..", "..", "..");
 }
 

@@ -1,0 +1,41 @@
+{
+    "name": "@syncreeper/cli",
+    "version": "1.0.0",
+    "description": "Unified CLI for managing SyncReeper deployments",
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "bin": {
+        "syncreeper": "dist/index.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsx src/index.ts",
+        "setup": "tsx src/index.ts setup",
+        "get-device-id": "tsx src/index.ts get-device-id",
+        "add-device": "tsx src/index.ts add-device",
+        "sync-now": "tsx src/index.ts sync-now",
+        "redeploy": "tsx src/index.ts redeploy",
+        "dashboard": "tsx src/index.ts dashboard",
+        "clean": "rimraf dist",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@inquirer/prompts": "^7.0.0",
+        "@syncreeper/shared": "workspace:*",
+        "@syncreeper/tui": "workspace:*",
+        "execa": "^9.0.0",
+        "ink": "^5.1.0",
+        "react": "^18.3.1",
+        "yargs": "^17.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "@types/react": "^18.3.0",
+        "@types/yargs": "^17.0.0",
+        "tsx": "^4.7.0",
+        "typescript": "^5.0.0",
+        "vitest": "^4.0.18"
+    }
+}

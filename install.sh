@@ -316,6 +316,11 @@ main() {
     pnpm run build
     success "Project built successfully"
 
+    echo ""
+    info "Linking syncreeper CLI globally..."
+    (cd packages/cli && pnpm link --global)
+    success "syncreeper command is now available globally"
+
     # Verify the sync bundle was created
     if [ -f "packages/sync/dist/bundle.js" ]; then
         BUNDLE_SIZE=$(du -h packages/sync/dist/bundle.js | cut -f1)
