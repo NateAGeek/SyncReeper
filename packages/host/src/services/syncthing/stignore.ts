@@ -85,12 +85,12 @@ export function generateStignoreContent(): string {
 // JavaScript / TypeScript
 // ============================================================
 **/node_modules
-**/dist
-**/build
+**/dist                    // Also: Python sdist/bdist output
+**/build                   // Also: Gradle, CMake, Python setuptools
 **/.next
 **/.nuxt
 **/.output
-**/.cache
+**/.cache                  // Also: Parcel, Snowpack
 **/.parcel-cache
 **/.turbo
 **/.npm
@@ -126,7 +126,7 @@ export function generateStignoreContent(): string {
 // ============================================================
 // Rust
 // ============================================================
-**/target
+**/target                  // Also: Maven, sbt, Clojure Leiningen
 **/*.rs.bk
 **/*.rlib
 **/*.rmeta
@@ -135,7 +135,7 @@ export function generateStignoreContent(): string {
 // ============================================================
 // Go
 // ============================================================
-**/vendor
+**/vendor                  // Also: PHP Composer, Ruby Bundler
 **/go.work
 
 // ============================================================
@@ -147,7 +147,7 @@ export function generateStignoreContent(): string {
 **/*.ear
 **/*.nar
 **/.gradle
-**/out
+**/out                     // Also: TypeScript outDir, VS Code extensions
 **/.idea/artifacts
 **/.idea/libraries
 **/pom.xml.tag
@@ -186,10 +186,12 @@ export function generateStignoreContent(): string {
 // ============================================================
 // C# / .NET
 // ============================================================
+// Note: **/[Dd]ebug, **/[Rr]elease, and **/packages are intentionally
+// omitted here — they conflict with other ecosystems (PNPM workspaces,
+// CMake configs, Electron, etc.). Per-repo .gitignore inlining handles
+// these for actual .NET projects.
 **/[Bb]in
 **/[Oo]bj
-**/[Dd]ebug
-**/[Rr]elease
 **/x64
 **/x86
 **/*.user
@@ -203,7 +205,6 @@ export function generateStignoreContent(): string {
 **/*.pidb
 **/*.userprefs
 **/*.nupkg
-**/packages
 **/project.lock.json
 **/project.fragment.lock.json
 **/artifacts

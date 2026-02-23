@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import { StatusBadge } from "../components/StatusBadge.js";
 import { useServiceStatus } from "../hooks/useServiceStatus.js";
 import { useServiceAction } from "../hooks/useServiceAction.js";
-import { isLinux, isMacOS } from "@syncreeper/shared";
+import { isLinux, isMacOS, DEFAULT_SERVICE_USER_LINUX } from "@syncreeper/shared";
 import { asServiceUser } from "../utils/userCommand.utils.js";
 import type { TabActionProps } from "../types.js";
 import { useEffect, useRef } from "react";
@@ -23,7 +23,7 @@ interface ServiceRow {
 function getServiceChecks(): ServiceRow[] {
     if (isLinux()) {
         const syncTimer = asServiceUser("systemctl", ["--user", "status", "syncreeper-sync.timer"]);
-        const syncthing = asServiceUser("systemctl", ["--user", "status", "syncthing"]);
+        const syncthingUnit = `syncthing@${DEFAULT_SERVICE_USER_LINUX}.service`;
 
         return [
             {
@@ -35,10 +35,10 @@ function getServiceChecks(): ServiceRow[] {
             },
             {
                 name: "Syncthing",
-                command: syncthing.command,
-                args: syncthing.args,
-                unit: "syncthing",
-                userLevel: true,
+                command: "systemctl",
+                args: ["status", syncthingUnit],
+                unit: syncthingUnit,
+                userLevel: false,
             },
             {
                 name: "SSHGuard",

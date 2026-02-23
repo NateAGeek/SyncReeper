@@ -4,14 +4,31 @@ import { StatusBadge } from "../components/StatusBadge.js";
 import { LogViewer } from "../components/LogViewer.js";
 import { useServiceStatus } from "../hooks/useServiceStatus.js";
 import { useServiceAction } from "../hooks/useServiceAction.js";
-import { isLinux, isMacOS } from "@syncreeper/shared";
+import { isLinux, isMacOS, DEFAULT_SERVICE_USER_LINUX } from "@syncreeper/shared";
 import { asServiceUser } from "../utils/userCommand.utils.js";
 import { execa } from "execa";
 import type { TabActionProps } from "../types.js";
 
+/**
+ * Syncthing runs as a system-level templated unit (syncthing@<user>.service)
+ * on this host, NOT as a user-level unit. The unit name includes the service
+ * user (e.g. syncthing@syncreeper.service).
+ */
+function getSyncthingUnit(): { unit: string; userLevel: boolean } {
+    if (isLinux()) {
+        return {
+            unit: `syncthing@${DEFAULT_SERVICE_USER_LINUX}.service`,
+            userLevel: false,
+        };
+    }
+    return { unit: "syncthing", userLevel: true };
+}
+
 function getServiceStatusCommand(): { command: string; args: string[] } {
     if (isLinux()) {
-        return asServiceUser("systemctl", ["--user", "status", "syncthing"]);
+        const { unit } = getSyncthingUnit();
+        // System-level unit: root can query directly, no wrapper needed
+        return { command: "systemctl", args: ["status", unit] };
     }
     if (isMacOS()) {
         return { command: "launchctl", args: ["list", "syncthing"] };
@@ -21,7 +38,7 @@ function getServiceStatusCommand(): { command: string; args: string[] } {
 
 function getPrimaryUnit(): { unit: string; userLevel: boolean; launchctlLabel?: string } {
     if (isLinux()) {
-        return { unit: "syncthing", userLevel: true };
+        return getSyncthingUnit();
     }
     if (isMacOS()) {
         return { unit: "syncthing", userLevel: true, launchctlLabel: "syncthing" };
