@@ -142,6 +142,36 @@ describe("SSH Config Generation", () => {
             expect(config).toContain("# === Disable Unnecessary Features ===");
             expect(config).toContain("# === Logging ===");
         });
+
+        it("should not include ProxyJump Match block when passthrough is disabled", () => {
+            const config = generateSSHDConfig(false);
+            expect(config).not.toContain("Match User syncreeper");
+            expect(config).not.toContain("AllowTcpForwarding local");
+        });
+
+        it("should include ProxyJump Match block when passthrough is enabled", () => {
+            const config = generateSSHDConfig(true);
+            expect(config).toContain("Match User syncreeper");
+            expect(config).toContain("    AllowTcpForwarding local");
+        });
+
+        it("should still disable global TCP forwarding when passthrough is enabled", () => {
+            const config = generateSSHDConfig(true);
+            // Global setting remains no; Match block overrides for syncreeper only
+            expect(config).toContain("AllowTcpForwarding no");
+            // The Match block provides the local override
+            expect(config).toContain("    AllowTcpForwarding local");
+        });
+
+        it("should include passthrough user in AllowUsers when passthrough is enabled", () => {
+            const config = generateSSHDConfig(true);
+            expect(config).toContain("AllowUsers syncreeper passthrough");
+        });
+
+        it("should include ProxyJump section header when passthrough is enabled", () => {
+            const config = generateSSHDConfig(true);
+            expect(config).toContain("# === ProxyJump Support for syncreeper ===");
+        });
     });
 
     describe("generateAuthorizedKeys", () => {

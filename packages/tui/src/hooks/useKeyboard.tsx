@@ -12,6 +12,7 @@ export interface KeyboardHandlers {
     onServiceStart?: () => void;
     onServiceStop?: () => void;
     onServiceRestart?: () => void;
+    onRegenerateStignore?: () => void;
 }
 
 export function useKeyboard(handlers: KeyboardHandlers): void {
@@ -79,6 +80,12 @@ export function useKeyboard(handlers: KeyboardHandlers): void {
         }
         if (input === "R") {
             handlers.onServiceRestart?.();
+            return;
+        }
+
+        // Regenerate .stignore
+        if (input === "I") {
+            handlers.onRegenerateStignore?.();
             return;
         }
     });

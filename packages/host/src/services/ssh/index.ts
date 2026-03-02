@@ -73,7 +73,9 @@ export function getSSHDHardeningConfig(passthroughEnabled = false) {
 /**
  * Generates the sshd_config.d drop-in file content
  *
- * @param passthroughEnabled - When true, adds 'passthrough' to AllowUsers
+ * @param passthroughEnabled - When true, adds 'passthrough' to AllowUsers and
+ *   a Match block for the service user to allow local TCP forwarding (required
+ *   for ProxyJump / SSH hop connections through the VPS to the tunnel).
  */
 export function generateSSHDConfig(passthroughEnabled = false): string {
     const SSHD_HARDENING_CONFIG = getSSHDHardeningConfig(passthroughEnabled);
@@ -112,6 +114,23 @@ export function generateSSHDConfig(passthroughEnabled = false): string {
         `LogLevel ${SSHD_HARDENING_CONFIG.logLevel}`,
         "",
     ];
+
+    // When passthrough is enabled, the service user needs local TCP forwarding
+    // to support ProxyJump / SSH hop connections (e.g., iPhone -> VPS -> Mac Mini).
+    // ProxyJump opens a direct-tcpip channel which requires AllowTcpForwarding local.
+    // This Match block overrides the global AllowTcpForwarding no for the service user only.
+    if (passthroughEnabled) {
+        lines.push(
+            `# === ProxyJump Support for ${getServiceUser().name} ===`,
+            `# Allows SSH hop connections through this VPS to the passthrough tunnel.`,
+            `# Only local forwarding is permitted (direct-tcpip for ProxyJump);`,
+            `# remote forwarding (-R) remains disabled for this user.`,
+            `Match User ${getServiceUser().name}`,
+            `    AllowTcpForwarding local`,
+            ""
+        );
+    }
+
     return lines.join("\n");
 }
 

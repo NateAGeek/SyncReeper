@@ -16,6 +16,7 @@
         "add-device": "tsx src/index.ts add-device",
         "sync-now": "tsx src/index.ts sync-now",
         "redeploy": "tsx src/index.ts redeploy",
+        "regenerate-stignore": "tsx src/index.ts regenerate-stignore",
         "dashboard": "tsx src/index.ts dashboard",
         "clean": "rimraf dist",
         "test": "vitest run",

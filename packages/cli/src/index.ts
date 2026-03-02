@@ -15,6 +15,7 @@ import { addDeviceCommand } from "./commands/add-device.js";
 import { syncNowCommand } from "./commands/sync-now.js";
 import { redeployCommand } from "./commands/redeploy.js";
 import { dashboardCommand } from "./commands/dashboard.js";
+import { regenerateStignoreCommand } from "./commands/regenerate-stignore.js";
 
 const argv = process.argv.slice(2);
 
@@ -35,6 +36,7 @@ yargs(hasCommand ? hideBin(process.argv) : argv)
     .command(addDeviceCommand)
     .command(syncNowCommand)
     .command(redeployCommand)
+    .command(regenerateStignoreCommand)
     .demandCommand(1, "Please specify a command. Run syncreeper --help for available commands.")
     .strict()
     .help()

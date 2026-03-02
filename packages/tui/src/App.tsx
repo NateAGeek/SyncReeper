@@ -11,6 +11,7 @@ import { SecurityTab } from "./tabs/SecurityTab.js";
 import { useKeyboard } from "./hooks/useKeyboard.js";
 import type { ServiceAction } from "./hooks/useServiceAction.js";
 import type { ActionStatus } from "./hooks/useServiceAction.js";
+import { resolveReposPath, runRegenerateStignore } from "./utils/stignore.utils.js";
 
 const TABS = [
     { label: "Overview", key: "overview" },
@@ -86,6 +87,31 @@ export function App({ version = "1.0.0" }: AppProps): React.ReactElement {
         setServiceActionTrigger((prev) => ({ action: "restart", seq: prev.seq + 1 }));
     }, []);
 
+    const handleRegenerateStignore = useCallback(() => {
+        if (actionStatus === "running") return;
+
+        setActionStatus("running");
+        setActionMessage("Regenerating .stignore...");
+
+        (async () => {
+            try {
+                const reposPath = await resolveReposPath();
+                runRegenerateStignore(reposPath);
+                setActionStatus("success");
+                setActionMessage(".stignore regenerated successfully");
+            } catch (err) {
+                setActionStatus("error");
+                const msg = err instanceof Error ? err.message : "unexpected error";
+                setActionMessage(`.stignore regeneration failed — ${msg}`);
+            }
+
+            setTimeout(() => {
+                setActionStatus("idle");
+                setActionMessage("");
+            }, 4000);
+        })();
+    }, [actionStatus]);
+
     const handleActionUpdate = useCallback((status: ActionStatus, message: string) => {
         setActionStatus(status);
         setActionMessage(message);
@@ -103,6 +129,7 @@ export function App({ version = "1.0.0" }: AppProps): React.ReactElement {
         onServiceStart: handleServiceStart,
         onServiceStop: handleServiceStop,
         onServiceRestart: handleServiceRestart,
+        onRegenerateStignore: handleRegenerateStignore,
     });
 
     const renderActiveTab = (): React.ReactElement => {
