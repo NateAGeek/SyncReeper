@@ -1,171 +1,144 @@
 # SyncReeper
 
-A Pulumi TypeScript project that automatically syncs all your GitHub repositories to a secured VPS and distributes them across devices using Syncthing.
+An Infrastructure-as-Code system that automatically backs up all your GitHub repositories to a hardened server and synchronizes them across your devices using Syncthing. Built with Pulumi, TypeScript, and a React-based terminal UI.
 
-## Overview
+## Why SyncReeper?
 
-SyncReeper solves the problem of keeping a complete, up-to-date backup of all your GitHub repositories synchronized across multiple machines. It runs on a VPS (Ubuntu 24.04) and:
+Your GitHub repositories are your work, your side projects, your history. SyncReeper ensures you always have a complete, up-to-date mirror of every repository you own or contribute to -- cloned to a server you control, synchronized to every machine you use, and protected by a security-hardened environment. No manual intervention required.
 
-1. **Clones all your GitHub repositories** - Fetches every non-archived repo you have access to
-2. **Keeps them updated** - Runs on a daily schedule via systemd timer
-3. **Syncs across devices** - Uses Syncthing to distribute repos to your other machines
-4. **Stays secure** - Hardens the VPS with firewall, brute-force protection, and auto-updates
+## How It Works
+
+```
+GitHub ──(API)──> VPS / Mac ──(Syncthing)──> Laptop, Desktop, NAS, ...
+                     |
+              Daily scheduled sync
+              Security hardened
+              Terminal dashboard
+```
+
+1. **Fetches** all your non-archived GitHub repositories via the REST API
+2. **Clones** new repos (shallow, single-branch) and **updates** existing ones (`fetch` + `reset`)
+3. **Distributes** the repository mirror to your other devices via Syncthing peer-to-peer sync
+4. **Secures** the server with firewall rules, SSH hardening, brute-force protection, and auto-updates
+5. **Monitors** everything through an interactive terminal dashboard
 
 ## Features
 
-- **Complete GitHub Backup** - Syncs all repositories you own or have access to (excludes archived repos)
-- **Cross-Device Sync** - Syncthing distributes your repos to laptops, desktops, NAS, etc.
-- **Security Hardened** - UFW firewall (SSH-only), SSHGuard brute-force protection, automatic security updates
-- **Infrastructure as Code** - Entire VPS configuration managed with Pulumi
-- **Encrypted Secrets** - GitHub tokens stored encrypted in Pulumi config
-- **Minimal Attack Surface** - Syncthing GUI only accessible via SSH tunnel
+### Repository Backup
 
-## Prerequisites
+- Fetches all non-archived repositories via GitHub REST API (owned, collaborator, org member)
+- Paginated fetching for users with many repositories
+- Shallow clone (`--depth 1`, `--single-branch`) for efficient initial setup
+- Incremental updates via `git fetch` + `git reset --hard`
+- Skips repositories with local modifications (dirty working tree, local commits ahead)
+- Supports both classic and fine-grained personal access tokens
+- Lock file prevents concurrent sync runs (10-minute stale timeout)
+- Daily scheduled execution via systemd timer (Linux) or launchd (macOS)
 
-- **VPS** running Ubuntu 24.04 with root SSH access
-- **Node.js** 20.6+ installed locally (for `--env-file` support)
-- **Pulumi CLI** installed (`curl -fsSL https://get.pulumi.com | sh`)
-- **GitHub Personal Access Token** with `repo` scope
+### Cross-Device Synchronization
+
+- Syncthing peer-to-peer file sync -- no cloud intermediary
+- Trusted device management (add/remove devices via CLI)
+- Shared folder configuration with automatic setup
+- Comprehensive `.stignore` generation (OS files, `node_modules`, `.env`, build artifacts for Python, Rust, Go, Java, C/C++, and more)
+- Auto-generated `.stignore` patterns from per-repo `.gitignore` files (scoped by path)
+- Syncthing GUI accessible only via SSH tunnel for security
+- Device ID retrieval command for easy setup
+
+### Server Security
+
+- **Firewall**: UFW (Linux) / pf (macOS) -- default deny inbound, allow outbound, SSH rate-limiting
+- **SSH Hardening**: Key-only authentication, password auth disabled, root login disabled, restricted to service user
+- **Brute-Force Protection**: SSHGuard with 2-hour block time, 1.5x multiplier, progressive bans
+- **Auto-Updates**: Unattended security upgrades with auto-reboot at 3 AM (Linux)
+- **Systemd Sandboxing**: `ProtectSystem=strict`, private `/tmp`, limited write paths
+
+### Reverse SSH Tunnel (Passthrough)
+
+- Reach a home machine behind NAT from the VPS
+- Dedicated `passthrough` system user with no login shell
+- SSHD Match block with forced command, restricted TCP forwarding
+- No interactive terminal, no X11, no agent forwarding
+- Client-side tool for macOS/Linux with autossh and launchd integration
+- Commands: `setup`, `start`, `stop`, `status`, `uninstall`
+
+### Terminal Dashboard (TUI)
+
+- 5 tabbed views: Overview, GitHub Sync, Syncthing, Passthrough, Security
+- Real-time service status polling (systemctl / launchctl)
+- Log streaming from journalctl / log files
+- Service actions: Start, Stop, Restart from within tabs
+- Keyboard navigation: Tab/Shift-Tab, j/k scroll, G/g jump, q quit, r refresh
+- Colored status badges: RUNNING, STOPPED, ERROR, ACTIVE, ENABLED, DISABLED
+- Root-user detection with automatic `sudo -u` command wrapping
+
+### Unified CLI
+
+| Command                    | Description                                  |
+| -------------------------- | -------------------------------------------- |
+| `syncreeper`               | Launch the TUI dashboard (default)           |
+| `syncreeper setup`         | Interactive setup wizard                     |
+| `syncreeper sync-now`      | Trigger a manual repository sync             |
+| `syncreeper get-device-id` | Retrieve Syncthing device ID (local or SSH)  |
+| `syncreeper add-device`    | Add a Syncthing peer device                  |
+| `syncreeper redeploy`      | Redeploy the sync bundle without `pulumi up` |
+
+### Infrastructure as Code
+
+- Entire system configuration managed with Pulumi (no manual server setup)
+- 5-phase deployment pipeline with explicit dependency ordering
+- Cross-platform: Linux (Ubuntu 24.04) and macOS
+- Platform abstraction pattern for every service (Linux/macOS implementations)
+- Local Pulumi backend -- no cloud account required
+- Encrypted secrets storage for tokens and keys
 
 ## Quick Start
 
-### 1. Clone and Install
-
 ```bash
+# One-line install (Linux / macOS)
+curl -fsSL https://raw.githubusercontent.com/NateAGeek/SyncReeper/main/install.sh | bash
+
+# Or manual setup
 git clone https://github.com/NateAGeek/SyncReeper.git
 cd SyncReeper
-pnpm install
-```
+pnpm install && pnpm run build
 
-### 2. Initialize Pulumi
-
-```bash
-# Use local backend (no Pulumi Cloud account needed)
+# Configure
 pulumi login --local
-
-# Run interactive setup
 pnpm run setup
-```
 
-The setup wizard will prompt for:
-
-- GitHub username and token
-- Trusted Syncthing device IDs
-- SSH public keys for VPS access
-
-### 3. Build and Deploy to VPS
-
-```bash
-# Build everything first
-pnpm run build
-
-# Deploy to VPS
+# Deploy
 pulumi up
 ```
 
-### 4. Connect Your Devices
-
-Get the VPS Syncthing device ID:
-
-```bash
-# SSH to VPS and run:
-syncreeper-device-id
-```
-
-Add this device ID to Syncthing on your other machines to start syncing.
-
-## Usage
-
-### Manual Sync
-
-Trigger an immediate repository sync on the VPS:
-
-```bash
-sudo systemctl start syncreeper-sync.service
-```
-
-### View Sync Logs
-
-```bash
-journalctl -u syncreeper-sync -f
-```
-
-### Access Syncthing GUI
-
-The Syncthing web interface is only accessible via SSH tunnel:
-
-```bash
-ssh -L 8384:localhost:8384 your-vps
-# Then open http://localhost:8384 in your browser
-```
-
-### Check Status
-
-```bash
-# Firewall status
-sudo ufw status
-
-# Syncthing status
-systemctl status syncthing@syncreeper
-
-# Sync timer status
-systemctl list-timers syncreeper-sync.timer
-```
-
-## Local Development
-
-### Running the Sync App Locally
-
-You can test the sync application locally without deploying to a VPS:
-
-```bash
-cd packages/sync
-
-# Copy the example env file
-cp .env.local.example .env.local
-
-# Edit with your values
-# GITHUB_TOKEN=ghp_your_token_here
-# GITHUB_USERNAME=your_username
-# REPOS_PATH=./test-repos
-
-# Build and run
-pnpm run build
-pnpm run start:local
-
-# Or for development with hot reload
-pnpm run dev:local
-```
-
-**Environment Variables:**
-
-| Variable          | Required | Description                                      |
-| ----------------- | -------- | ------------------------------------------------ |
-| `GITHUB_TOKEN`    | Yes      | GitHub PAT with `repo` scope                     |
-| `GITHUB_USERNAME` | Yes      | Your GitHub username                             |
-| `REPOS_PATH`      | No       | Directory to store repos (default: `/srv/repos`) |
+For detailed installation instructions, platform-specific steps, and prerequisites, see [INSTALLATION.md](./INSTALLATION.md).
 
 ## Configuration
 
-All configuration is stored in Pulumi config. View current settings:
+All configuration is stored in Pulumi config. View current settings with `pulumi config`.
 
-```bash
-pulumi config
-```
+### Required Settings
 
-### Configuration Options
+| Key                                    | Description                           |
+| -------------------------------------- | ------------------------------------- |
+| `syncreeper:github-token`              | GitHub PAT with `repo` scope (secret) |
+| `syncreeper:github-username`           | Your GitHub username                  |
+| `syncreeper:syncthing-trusted-devices` | Array of trusted Syncthing device IDs |
+| `syncreeper:ssh-authorized-keys`       | Array of SSH public keys for access   |
 
-| Key                                    | Required | Description                                  |
-| -------------------------------------- | -------- | -------------------------------------------- |
-| `syncreeper:github-token`              | Yes      | GitHub PAT with `repo` scope (secret)        |
-| `syncreeper:github-username`           | Yes      | Your GitHub username                         |
-| `syncreeper:syncthing-trusted-devices` | Yes      | Array of trusted device IDs                  |
-| `syncreeper:syncthing-folder-id`       | No       | Folder ID for sync (default: `repos`)        |
-| `syncreeper:ssh-authorized-keys`       | Yes      | Array of SSH public keys                     |
-| `syncreeper:sync-schedule`             | No       | Systemd timer schedule (default: `daily`)    |
-| `syncreeper:repos-path`                | No       | Where to store repos (default: `/srv/repos`) |
+### Optional Settings
 
-### Modify Configuration
+| Key                                      | Default      | Description                       |
+| ---------------------------------------- | ------------ | --------------------------------- |
+| `syncreeper:syncthing-folder-id`         | `repos`      | Syncthing shared folder ID        |
+| `syncreeper:sync-schedule`               | `daily`      | Systemd timer schedule expression |
+| `syncreeper:repos-path`                  | `/srv/repos` | Repository storage directory      |
+| `syncreeper:service-user`                | `syncreeper` | Service user (Linux default)      |
+| `syncreeper:passthrough-enabled`         | `false`      | Enable reverse SSH tunnel         |
+| `syncreeper:passthrough-port`            | `2222`       | Tunnel port on VPS                |
+| `syncreeper:passthrough-authorized-keys` | --           | SSH keys for tunnel user          |
+
+### Modifying Configuration
 
 ```bash
 # Update a value
@@ -181,95 +154,149 @@ pulumi config set syncreeper:syncthing-trusted-devices '["DEVICE-ID-1", "DEVICE-
 pulumi up
 ```
 
+## Usage
+
+### TUI Dashboard
+
+```bash
+syncreeper
+# or
+syncreeper dashboard
+```
+
+### Manual Sync
+
+```bash
+# Via CLI
+syncreeper sync-now
+syncreeper sync-now --follow    # Stream logs after triggering
+
+# Via systemd directly (Linux)
+sudo systemctl start syncreeper-sync.service
+```
+
+### View Logs
+
+```bash
+# Via TUI dashboard (recommended)
+syncreeper
+
+# Via journalctl (Linux)
+journalctl -u syncreeper-sync -f
+```
+
+### Syncthing Management
+
+```bash
+# Get device ID
+syncreeper get-device-id
+
+# Add a peer device
+syncreeper add-device
+
+# Access Syncthing GUI (SSH tunnel)
+ssh -L 8384:localhost:8384 your-vps
+# Then open http://localhost:8384
+```
+
+### Check Service Status
+
+```bash
+# Via TUI (recommended)
+syncreeper
+
+# Manual checks (Linux)
+systemctl list-timers syncreeper-sync.timer
+systemctl status syncthing@syncreeper
+sudo ufw status
+```
+
 ## Project Structure
 
 ```
 SyncReeper/
 ├── packages/
-│   ├── host/                     # Pulumi infrastructure code
+│   ├── shared/                  # Platform detection and shared types
+│   ├── host/                    # Pulumi infrastructure (5-phase deployment)
 │   │   └── src/
-│   │       ├── index.ts          # Main orchestrator
-│   │       ├── config/           # Configuration types and loader
-│   │       ├── lib/              # Utility functions
-│   │       ├── resources/        # Base resources (user, directories)
-│   │       └── services/         # Service modules
-│   │           ├── firewall/     # UFW configuration
-│   │           ├── sshguard/     # Brute-force protection
-│   │           ├── auto-updates/ # Unattended upgrades
-│   │           ├── github-sync/  # Sync service + timer
-│   │           └── syncthing/    # Syncthing configuration
-│   │
-│   ├── sync/                     # Sync application (bundled for deployment)
-│   │   └── src/
-│   │       ├── index.ts          # Entry point
-│   │       ├── github.ts         # GitHub API client
-│   │       ├── git.ts            # Git operations
-│   │       └── lock.ts           # Lock file handling
-│   │
-│   ├── shared/                   # Shared types and utilities
-│   │   └── src/
-│   │       ├── platform.ts       # Platform detection
-│   │       └── config.ts         # Configuration types
-│   │
-│   ├── host-utils/               # CLI utilities (setup, sync-now, etc.)
-│   │   └── src/
-│   │       ├── setup.ts          # Interactive setup wizard
-│   │       ├── sync-now.ts       # Manual sync trigger
-│   │       ├── add-device.ts     # Add Syncthing device
-│   │       └── get-device-id.ts  # Get Syncthing device ID
-│   │
-│   └── node-passthrough/         # Node passthrough service
-│
-├── package.json
-├── pnpm-workspace.yaml
-├── tsconfig.base.json
-├── eslint.config.js
-└── Pulumi.yaml
+│   │       ├── config/          # Platform-aware configuration
+│   │       ├── lib/             # Pulumi command abstractions
+│   │       ├── resources/       # User and directory provisioning
+│   │       └── services/        # Service modules
+│   │           ├── packages/    #   System package installation
+│   │           ├── firewall/    #   UFW / pf configuration
+│   │           ├── ssh/         #   SSH hardening
+│   │           ├── sshguard/    #   Brute-force protection
+│   │           ├── auto-updates/#   Unattended security upgrades
+│   │           ├── github-sync/ #   Sync app + timer deployment
+│   │           ├── syncthing/   #   Syncthing configuration
+│   │           └── passthrough/ #   Reverse SSH tunnel
+│   ├── sync/                    # Standalone sync app (Rollup-bundled)
+│   ├── cli/                     # Unified CLI (yargs subcommands)
+│   ├── tui/                     # Terminal dashboard (Ink/React)
+│   └── node-passthrough/        # Reverse SSH tunnel client
+├── install.sh                   # Linux/macOS installer
+├── install.ps1                  # Windows installer
+├── Pulumi.yaml                  # Pulumi project definition
+└── architecture.md              # Detailed architecture docs
 ```
 
-## Scripts
+## Local Development
 
-| Script                   | Description                          |
-| ------------------------ | ------------------------------------ |
-| `pnpm run build`         | Build all packages                   |
-| `pnpm run build:host`    | Build shared + host packages         |
-| `pnpm run build:sync`    | Build sync application               |
-| `pnpm run lint`          | Run ESLint                           |
-| `pnpm run lint:fix`      | Fix ESLint issues                    |
-| `pnpm run format`        | Format with Prettier                 |
-| `pnpm run check`         | Run all checks (lint, format, build) |
-| `pnpm run setup`         | Run interactive setup wizard         |
-| `pnpm run sync-now`      | Trigger a manual sync                |
-| `pnpm run get-device-id` | Get Syncthing device ID              |
-| `pnpm run add-device`    | Add a Syncthing device               |
+### Running the Sync App Locally
 
-## Security Model
+```bash
+cd packages/sync
+cp .env.local.example .env.local
 
-SyncReeper follows a defense-in-depth approach:
+# Edit .env.local with your values:
+#   GITHUB_TOKEN=ghp_your_token
+#   GITHUB_USERNAME=your_username
+#   REPOS_PATH=./test-repos
 
-1. **Network Security**
-    - UFW firewall allows only SSH (port 22)
-    - SSH rate-limited to prevent brute-force
-    - Syncthing uses relay servers (no exposed ports)
+# Development with hot reload
+pnpm run dev:local
 
-2. **Access Control**
-    - Dedicated `syncreeper` service user
-    - Syncthing GUI only on localhost
-    - SSH key authentication recommended
+# Or production build
+pnpm run build && pnpm run start:local
+```
 
-3. **Brute-Force Protection**
-    - SSHGuard monitors auth logs
-    - Automatically blocks malicious IPs
-    - Progressive ban duration for repeat offenders
+### Build Scripts
 
-4. **Automatic Updates**
-    - Unattended security upgrades enabled
-    - Automatic reboot at 3 AM if required
+| Script                | Description                         |
+| --------------------- | ----------------------------------- |
+| `pnpm run build`      | Build all packages                  |
+| `pnpm run build:host` | Build shared + host packages        |
+| `pnpm run build:sync` | Build sync application bundle       |
+| `pnpm run lint`       | Run ESLint                          |
+| `pnpm run lint:fix`   | Auto-fix lint issues                |
+| `pnpm run format`     | Format with Prettier                |
+| `pnpm run check`      | Full CI check (lint, format, build) |
+| `pnpm run clean`      | Remove all dist/ directories        |
 
-5. **Systemd Sandboxing**
-    - Sync service runs with `ProtectSystem=strict`
-    - Limited write access (only to repos directory)
-    - Private `/tmp` directory
+### Running Tests
+
+```bash
+pnpm --filter @syncreeper/host test
+pnpm --filter @syncreeper/tui test
+pnpm --filter @syncreeper/cli test
+pnpm --filter @syncreeper/shared test
+```
+
+## Tech Stack
+
+| Technology  | Role                               |
+| ----------- | ---------------------------------- |
+| TypeScript  | Primary language (entire codebase) |
+| Pulumi      | Infrastructure-as-Code engine      |
+| React + Ink | Terminal UI dashboard              |
+| Octokit     | GitHub REST API client             |
+| simple-git  | Git clone/fetch operations         |
+| Syncthing   | Peer-to-peer file synchronization  |
+| Rollup      | Sync app bundling                  |
+| Yargs       | CLI argument parsing               |
+| Vitest      | Test runner                        |
+| pnpm        | Workspace-aware package manager    |
 
 ## Troubleshooting
 
@@ -296,7 +323,7 @@ systemctl status syncthing@syncreeper
 journalctl -u syncthing@syncreeper -f
 
 # Verify device ID
-syncreeper-device-id
+syncreeper get-device-id
 ```
 
 ### Firewall blocking connections
@@ -311,28 +338,25 @@ sudo journalctl -u sshguard -n 50
 
 ### Permission errors (EROFS)
 
-If the sync service fails with "read-only file system" errors:
+If the sync service fails with "read-only file system" errors, check the systemd sandboxing:
 
 ```bash
-# Check the systemd service file
 cat /etc/systemd/system/syncreeper-sync.service | grep ReadWritePaths
-
-# Should show:
-# ReadWritePaths=/srv/repos
+# Should show: ReadWritePaths=/srv/repos
 
 # After fixing, reload and restart
 sudo systemctl daemon-reload
 sudo systemctl start syncreeper-sync.service
 ```
 
-## License
-
-MIT
-
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run `pnpm run check` to verify
+4. Run `pnpm run check` to verify lint, format, and build
 5. Submit a pull request
+
+## License
+
+MIT

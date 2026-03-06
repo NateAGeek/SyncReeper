@@ -4,6 +4,7 @@ import { StatusBadge } from "../components/StatusBadge.js";
 import { LogViewer } from "../components/LogViewer.js";
 import { isLinux, isMacOS } from "@syncreeper/shared";
 import { execa } from "execa";
+import { asSystemService } from "../utils/userCommand.utils.js";
 import type { TabActionProps } from "../types.js";
 
 export function PassthroughTab({
@@ -55,20 +56,29 @@ export function PassthroughTab({
 
                 // Fetch recent SSH logs mentioning passthrough
                 try {
-                    const result = await execa(
-                        "journalctl",
-                        ["-u", "sshd", "-n", "50", "--no-pager", "--grep", "passthrough"],
-                        { reject: false }
-                    );
+                    const logCmd = asSystemService("journalctl", [
+                        "-u",
+                        "sshd",
+                        "-n",
+                        "50",
+                        "--no-pager",
+                        "--grep",
+                        "passthrough",
+                    ]);
+                    const result = await execa(logCmd.command, logCmd.args, {
+                        reject: false,
+                    });
                     if (!cancelled && result.exitCode === 0 && result.stdout.trim()) {
                         setLogLines(result.stdout.split("\n"));
                     } else if (!cancelled) {
                         // Try alternative: search auth log
-                        const altResult = await execa(
-                            "bash",
-                            ["-c", "grep passthrough /var/log/auth.log 2>/dev/null | tail -50"],
-                            { reject: false }
-                        );
+                        const altCmd = asSystemService("bash", [
+                            "-c",
+                            "grep passthrough /var/log/auth.log 2>/dev/null | tail -50",
+                        ]);
+                        const altResult = await execa(altCmd.command, altCmd.args, {
+                            reject: false,
+                        });
                         if (!cancelled && altResult.stdout.trim()) {
                             setLogLines(altResult.stdout.split("\n"));
                         } else if (!cancelled) {

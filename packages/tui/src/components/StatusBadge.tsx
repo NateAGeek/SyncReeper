@@ -6,6 +6,7 @@ export type ServiceStatus =
     | "active"
     | "stopped"
     | "error"
+    | "no_permission"
     | "enabled"
     | "disabled"
     | "unknown";
@@ -19,6 +20,7 @@ const STATUS_CONFIG: Record<ServiceStatus, { label: string; color: string; bold:
     active: { label: "ACTIVE", color: "green", bold: true },
     stopped: { label: "STOPPED", color: "yellow", bold: false },
     error: { label: "ERROR", color: "red", bold: true },
+    no_permission: { label: "NO PERM", color: "magenta", bold: false },
     enabled: { label: "ENABLED", color: "green", bold: false },
     disabled: { label: "DISABLED", color: "gray", bold: false },
     unknown: { label: "UNKNOWN", color: "gray", bold: false },

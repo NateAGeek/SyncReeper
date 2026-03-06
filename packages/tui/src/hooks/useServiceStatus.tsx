@@ -1,7 +1,32 @@
 import { useState, useEffect, useCallback } from "react";
 import { execa } from "execa";
 
-export type ServiceStatusValue = "running" | "active" | "stopped" | "error" | "unknown";
+export type ServiceStatusValue =
+    | "running"
+    | "active"
+    | "stopped"
+    | "error"
+    | "no_permission"
+    | "unknown";
+
+/**
+ * Detect permission-related failures from sudo or D-Bus access.
+ * `sudo -n` exits with 1 and prints "a password is required" when the user
+ * lacks NOPASSWD. D-Bus/polkit failures contain "Permission denied" or
+ * "not privileged".
+ */
+function isPermissionError(exitCode: number | undefined, output: string): boolean {
+    if (exitCode === 0) return false;
+    const lower = output.toLowerCase();
+    return (
+        lower.includes("a password is required") ||
+        lower.includes("permission denied") ||
+        lower.includes("not privileged") ||
+        lower.includes("authentication is required") ||
+        lower.includes("no password was provided") ||
+        lower.includes("sudo: a terminal is required")
+    );
+}
 
 export interface ServiceStatusResult {
     status: ServiceStatusValue;
@@ -72,6 +97,9 @@ export function useServiceStatus(
                     } else {
                         setStatus("running");
                     }
+                } else if (isPermissionError(result.exitCode, fullOutput)) {
+                    // sudo -n failed (no tty / no NOPASSWD rule) or D-Bus access denied
+                    setStatus("no_permission");
                 } else if (result.exitCode === 3) {
                     // systemctl returns 3 for "inactive" services.
                     // For timer-triggered oneshot services, inactive + successful
