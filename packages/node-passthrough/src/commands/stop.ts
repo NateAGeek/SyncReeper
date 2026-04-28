@@ -1,7 +1,8 @@
 /**
  * Stop command for the passthrough tunnel
  *
- * Unloads the launchd plist to stop the autossh tunnel.
+ * Unloads the LaunchDaemon plist to stop the autossh tunnel.
+ * Requires sudo since the plist lives in /Library/LaunchDaemons/.
  */
 
 import { existsSync } from "node:fs";
@@ -21,7 +22,7 @@ export async function stop(): Promise<void> {
     }
 
     try {
-        await execa("launchctl", ["unload", plistPath]);
+        await execa("sudo", ["launchctl", "unload", plistPath], { stdio: "inherit" });
         console.log("Passthrough tunnel stopped.");
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);

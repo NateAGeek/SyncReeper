@@ -4,11 +4,15 @@
  * Manages a small JSON config file at ~/.config/syncreeper/passthrough.json
  * that stores VPS connection details so subsequent commands don't need
  * to re-prompt for them.
+ *
+ * The tunnel runs as a macOS LaunchDaemon (system-level service) so it
+ * persists across user logout, lock screen, and reboots without requiring
+ * a user login session.
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 
 /**
@@ -36,6 +40,7 @@ export const DEFAULTS = {
     tunnelPort: 2222,
     keyName: "syncreeper-passthrough",
     plistLabel: "com.syncreeper.passthrough",
+    logDir: "/var/log/syncreeper",
 } as const;
 
 /**
@@ -60,10 +65,39 @@ export function getDefaultKeyPath(): string {
 }
 
 /**
- * Gets the launchd plist path
+ * Gets the LaunchDaemon plist path
  */
 export function getPlistPath(): string {
+    return join("/Library", "LaunchDaemons", `${DEFAULTS.plistLabel}.plist`);
+}
+
+/**
+ * Gets the legacy LaunchAgent plist path (for migration detection)
+ */
+export function getLegacyPlistPath(): string {
     return join(homedir(), "Library", "LaunchAgents", `${DEFAULTS.plistLabel}.plist`);
+}
+
+/**
+ * Gets the current username for the daemon's UserName key.
+ * The daemon runs autossh as this user so it can access the user's SSH keys.
+ */
+export function getCurrentUsername(): string {
+    return process.env.USER ?? userInfo().username;
+}
+
+/**
+ * Gets the stdout log path
+ */
+export function getLogOutPath(): string {
+    return join(DEFAULTS.logDir, "passthrough.out.log");
+}
+
+/**
+ * Gets the stderr log path
+ */
+export function getLogErrPath(): string {
+    return join(DEFAULTS.logDir, "passthrough.err.log");
 }
 
 /**
