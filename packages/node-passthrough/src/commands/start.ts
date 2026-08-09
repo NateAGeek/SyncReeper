@@ -1,7 +1,8 @@
 /**
  * Start command for the passthrough tunnel
  *
- * Loads the launchd plist to start the autossh tunnel.
+ * Loads the LaunchDaemon plist to start the autossh tunnel.
+ * Requires sudo since the plist lives in /Library/LaunchDaemons/.
  */
 
 import { existsSync } from "node:fs";
@@ -24,13 +25,13 @@ export async function start(): Promise<void> {
     const plistPath = getPlistPath();
 
     if (!existsSync(plistPath)) {
-        console.log("LaunchAgent plist not found. Regenerating...");
+        console.log("LaunchDaemon plist not found. Regenerating...");
         await generatePlistFromConfig(config);
     }
 
     try {
-        // Try to load (start) the agent
-        await execa("launchctl", ["load", plistPath]);
+        // Load (start) the daemon — requires sudo
+        await execa("sudo", ["launchctl", "load", plistPath], { stdio: "inherit" });
         console.log("Passthrough tunnel started.");
         console.log(
             `Tunnel: localhost:${config.tunnelPort} on VPS -> localhost:22 on this machine`

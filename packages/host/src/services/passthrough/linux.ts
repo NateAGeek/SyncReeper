@@ -8,7 +8,7 @@
  * - passthrough user has /usr/sbin/nologin as shell (no interactive access)
  * - ForceCommand prevents any command execution (tunnel only)
  * - AllowTcpForwarding restricted to 'remote' only (only -R, not -L)
- * - PermitOpen restricts which ports can be forwarded
+ * - PermitListen restricts which ports can be used for reverse tunnels
  * - PermitTTY disabled (no interactive terminal)
  * - GatewayPorts disabled (tunnel only accessible from VPS localhost)
  */
@@ -37,13 +37,13 @@ export function generatePassthroughSSHDConfig(tunnelPort: number): string {
         "#   - Cannot execute any commands (ForceCommand /usr/sbin/nologin)",
         "#   - Cannot open an interactive terminal (PermitTTY no)",
         "#   - Can only set up remote/reverse port forwards (-R)",
-        `#   - Can only forward to localhost:${tunnelPort}`,
+        `#   - Can only listen on port ${tunnelPort} for reverse tunnels`,
         "#   - Cannot bind to external interfaces (GatewayPorts no)",
         "",
         "Match User passthrough",
         "    ForceCommand /usr/sbin/nologin",
         "    AllowTcpForwarding remote",
-        `    PermitOpen localhost:${tunnelPort}`,
+        `    PermitListen ${tunnelPort}`,
         "    GatewayPorts no",
         "    PermitTTY no",
         "    X11Forwarding no",

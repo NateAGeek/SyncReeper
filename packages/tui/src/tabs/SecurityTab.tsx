@@ -6,6 +6,7 @@ import { useServiceStatus } from "../hooks/useServiceStatus.js";
 import { useServiceAction } from "../hooks/useServiceAction.js";
 import { isLinux, isMacOS } from "@syncreeper/shared";
 import { execa } from "execa";
+import { asSystemService } from "../utils/userCommand.utils.js";
 import type { TabActionProps } from "../types.js";
 
 export function SecurityTab({
@@ -20,11 +21,10 @@ export function SecurityTab({
     const [isLoading, setIsLoading] = useState(true);
 
     // SSHGuard status
-    const sshguardStatus = useServiceStatus(
-        isLinux() ? "systemctl" : "echo",
-        isLinux() ? ["status", "sshguard"] : ["n/a"],
-        refreshTrigger
-    );
+    const sshguardCmd = isLinux()
+        ? asSystemService("systemctl", ["status", "sshguard"])
+        : { command: "echo", args: ["n/a"] };
+    const sshguardStatus = useServiceStatus(sshguardCmd.command, sshguardCmd.args, refreshTrigger);
 
     // Service action targets SSHGuard (system-level)
     const serviceAction = useServiceAction({
@@ -54,11 +54,21 @@ export function SecurityTab({
             if (isLinux()) {
                 // Firewall status
                 try {
-                    const result = await execa("ufw", ["status", "verbose"], { reject: false });
+                    const ufwCmd = asSystemService("ufw", ["status", "verbose"]);
+                    const result = await execa(ufwCmd.command, ufwCmd.args, { reject: false });
                     if (!cancelled && result.exitCode === 0) {
                         setFirewallLines(result.stdout.split("\n").filter((l) => l.trim()));
                     } else if (!cancelled) {
-                        setFirewallLines(["UFW not available or not running"]);
+                        const stderr = result.stderr?.toLowerCase() ?? "";
+                        if (
+                            stderr.includes("a password is required") ||
+                            stderr.includes("permission denied") ||
+                            stderr.includes("sudo: a terminal is required")
+                        ) {
+                            setFirewallLines(["UFW status requires root privileges"]);
+                        } else {
+                            setFirewallLines(["UFW not available or not running"]);
+                        }
                     }
                 } catch {
                     if (!cancelled) setFirewallLines(["Unable to check firewall status"]);
@@ -66,15 +76,14 @@ export function SecurityTab({
 
                 // SSHGuard blocked IPs
                 try {
-                    // Try nftables first
-                    const result = await execa(
-                        "bash",
-                        [
-                            "-c",
-                            "nft list table sshguard 2>/dev/null || iptables -L sshguard -n 2>/dev/null",
-                        ],
-                        { reject: false }
-                    );
+                    // Try nftables first, then iptables — both may need root
+                    const nftCmd = asSystemService("bash", [
+                        "-c",
+                        "nft list table sshguard 2>/dev/null || iptables -L sshguard -n 2>/dev/null",
+                    ]);
+                    const result = await execa(nftCmd.command, nftCmd.args, {
+                        reject: false,
+                    });
                     if (!cancelled && result.exitCode === 0 && result.stdout.trim()) {
                         const ipMatches = result.stdout.match(
                             /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/g
@@ -93,7 +102,11 @@ export function SecurityTab({
 
                 // Auto-updates
                 try {
-                    const result = await execa("systemctl", ["status", "unattended-upgrades"], {
+                    const autoUpdCmd = asSystemService("systemctl", [
+                        "status",
+                        "unattended-upgrades",
+                    ]);
+                    const result = await execa(autoUpdCmd.command, autoUpdCmd.args, {
                         reject: false,
                     });
                     if (!cancelled) {
@@ -102,7 +115,16 @@ export function SecurityTab({
                         } else if (result.exitCode === 3) {
                             setAutoUpdateInfo("enabled (inactive)");
                         } else {
-                            setAutoUpdateInfo("not installed");
+                            const stderr = result.stderr?.toLowerCase() ?? "";
+                            if (
+                                stderr.includes("a password is required") ||
+                                stderr.includes("permission denied") ||
+                                stderr.includes("sudo: a terminal is required")
+                            ) {
+                                setAutoUpdateInfo("requires root privileges");
+                            } else {
+                                setAutoUpdateInfo("not installed");
+                            }
                         }
                     }
                 } catch {

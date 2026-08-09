@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { execa } from "execa";
 import { isLinux, isMacOS } from "@syncreeper/shared";
-import { asServiceUser } from "../utils/userCommand.utils.js";
+import { asServiceUser, asSystemService } from "../utils/userCommand.utils.js";
 
 export type ServiceAction = "start" | "stop" | "restart";
 
@@ -53,13 +53,16 @@ export function useServiceAction(options: ServiceActionOptions): ServiceActionRe
 
                         if (userLevel) {
                             // Use asServiceUser so it works correctly when root
+                            // or as the service user without D-Bus env vars
                             const wrapped = asServiceUser("systemctl", ["--user", action, unit]);
                             command = wrapped.command;
                             fullArgs = wrapped.args;
                         } else {
-                            // System-level: use sudo directly
-                            command = "sudo";
-                            fullArgs = ["systemctl", action, unit];
+                            // System-level: use asSystemService which wraps
+                            // with `sudo -n` when not root
+                            const wrapped = asSystemService("systemctl", [action, unit]);
+                            command = wrapped.command;
+                            fullArgs = wrapped.args;
                         }
 
                         const result = await execa(command, fullArgs, {
@@ -75,7 +78,18 @@ export function useServiceAction(options: ServiceActionOptions): ServiceActionRe
                             setActionStatus("error");
                             const err =
                                 result.stderr?.trim() || result.stdout?.trim() || "unknown error";
-                            setMessage(`${unit}: ${action} failed — ${err}`);
+                            const lower = err.toLowerCase();
+                            if (
+                                lower.includes("a password is required") ||
+                                lower.includes("permission denied") ||
+                                lower.includes("sudo: a terminal is required")
+                            ) {
+                                setMessage(
+                                    `${unit}: ${action} failed — needs sudo privileges (configure sudoers for this user)`
+                                );
+                            } else {
+                                setMessage(`${unit}: ${action} failed — ${err}`);
+                            }
                         }
                     } else if (isMacOS()) {
                         const label = launchctlLabel ?? unit;

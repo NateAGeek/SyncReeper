@@ -1,10 +1,11 @@
 /**
  * Unit tests for userCommand.utils.ts
  *
- * Tests the asServiceUser() and isRoot() utilities that handle
- * wrapping user-level commands when running as root.
+ * Tests the asServiceUser(), asSystemService(), asJournalctl(), and isRoot()
+ * utilities that handle wrapping commands for correct privilege handling.
  */
 
+/// <reference types="node" />
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 
 // Use vi.hoisted to set up mock functions before vi.mock factories run
@@ -42,19 +43,27 @@ vi.mock("@syncreeper/shared", () => ({
 // Must import AFTER mocks are set up
 import {
     asServiceUser,
+    asSystemService,
     asJournalctl,
     isRoot,
     _resetServiceUserCache,
 } from "../../src/utils/userCommand.utils";
 
 describe("userCommand.utils", () => {
+    const originalEnv = { ...process.env };
+
     beforeEach(() => {
         vi.clearAllMocks();
         _resetServiceUserCache();
+        // Clear D-Bus env vars so tests get predictable behavior
+        delete process.env.XDG_RUNTIME_DIR;
+        delete process.env.DBUS_SESSION_BUS_ADDRESS;
     });
 
     afterEach(() => {
         vi.restoreAllMocks();
+        // Restore original env
+        process.env = { ...originalEnv };
     });
 
     describe("isRoot()", () => {
@@ -99,7 +108,7 @@ describe("userCommand.utils", () => {
     });
 
     describe("asServiceUser()", () => {
-        it("should return command as-is when not root", () => {
+        it("should inject D-Bus env vars when not root on Linux and env vars missing", () => {
             mockIsLinux.mockReturnValue(true);
             mockUserInfo.mockReturnValue({
                 username: "syncreeper",
@@ -108,6 +117,32 @@ describe("userCommand.utils", () => {
                 shell: "/bin/bash",
                 homedir: "/home/syncreeper",
             });
+            // XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS are cleared in beforeEach
+
+            const result = asServiceUser("systemctl", ["--user", "status", "syncthing"]);
+
+            expect(result.command).toBe("env");
+            expect(result.args).toEqual([
+                "XDG_RUNTIME_DIR=/run/user/999",
+                "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/999/bus",
+                "systemctl",
+                "--user",
+                "status",
+                "syncthing",
+            ]);
+        });
+
+        it("should return command as-is when not root and D-Bus env vars are set", () => {
+            mockIsLinux.mockReturnValue(true);
+            mockUserInfo.mockReturnValue({
+                username: "syncreeper",
+                uid: 999,
+                gid: 999,
+                shell: "/bin/bash",
+                homedir: "/home/syncreeper",
+            });
+            process.env.XDG_RUNTIME_DIR = "/run/user/999";
+            process.env.DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/999/bus";
 
             const result = asServiceUser("systemctl", ["--user", "status", "syncthing"]);
 
@@ -339,6 +374,72 @@ describe("userCommand.utils", () => {
 
             expect(result.command).toBe("journalctl");
             expect(result.args).toEqual(["_SYSTEMD_USER_UNIT=syncthing.service"]);
+        });
+    });
+
+    describe("asSystemService()", () => {
+        it("should return command as-is when root", () => {
+            mockIsLinux.mockReturnValue(true);
+            mockUserInfo.mockReturnValue({
+                username: "root",
+                uid: 0,
+                gid: 0,
+                shell: "/bin/bash",
+                homedir: "/root",
+            });
+
+            const result = asSystemService("systemctl", ["status", "sshguard"]);
+
+            expect(result.command).toBe("systemctl");
+            expect(result.args).toEqual(["status", "sshguard"]);
+        });
+
+        it("should wrap with sudo -n when not root on Linux", () => {
+            mockIsLinux.mockReturnValue(true);
+            mockUserInfo.mockReturnValue({
+                username: "syncreeper",
+                uid: 999,
+                gid: 999,
+                shell: "/bin/bash",
+                homedir: "/home/syncreeper",
+            });
+
+            const result = asSystemService("systemctl", ["status", "sshguard"]);
+
+            expect(result.command).toBe("sudo");
+            expect(result.args).toEqual(["-n", "systemctl", "status", "sshguard"]);
+        });
+
+        it("should wrap ufw with sudo -n when not root on Linux", () => {
+            mockIsLinux.mockReturnValue(true);
+            mockUserInfo.mockReturnValue({
+                username: "syncreeper",
+                uid: 999,
+                gid: 999,
+                shell: "/bin/bash",
+                homedir: "/home/syncreeper",
+            });
+
+            const result = asSystemService("ufw", ["status"]);
+
+            expect(result.command).toBe("sudo");
+            expect(result.args).toEqual(["-n", "ufw", "status"]);
+        });
+
+        it("should return command as-is on macOS", () => {
+            mockIsLinux.mockReturnValue(false);
+            mockUserInfo.mockReturnValue({
+                username: "admin",
+                uid: 501,
+                gid: 20,
+                shell: "/bin/zsh",
+                homedir: "/Users/admin",
+            });
+
+            const result = asSystemService("systemctl", ["status", "sshguard"]);
+
+            expect(result.command).toBe("systemctl");
+            expect(result.args).toEqual(["status", "sshguard"]);
         });
     });
 });
