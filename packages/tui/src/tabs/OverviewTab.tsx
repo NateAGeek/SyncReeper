@@ -3,13 +3,8 @@ import { Box, Text } from "ink";
 import { StatusBadge } from "../components/StatusBadge.js";
 import { useServiceStatus } from "../hooks/useServiceStatus.js";
 import { useServiceAction } from "../hooks/useServiceAction.js";
-<<<<<<< HEAD
 import { isLinux, isMacOS, DEFAULT_SERVICE_USER_LINUX } from "@syncreeper/shared";
-import { asServiceUser } from "../utils/userCommand.utils.js";
-=======
-import { isLinux, isMacOS } from "@syncreeper/shared";
 import { asServiceUser, asSystemService } from "../utils/userCommand.utils.js";
->>>>>>> origin/main
 import type { TabActionProps } from "../types.js";
 import { useEffect, useRef } from "react";
 
@@ -28,14 +23,14 @@ interface ServiceRow {
 function getServiceChecks(): ServiceRow[] {
     if (isLinux()) {
         const syncTimer = asServiceUser("systemctl", ["--user", "status", "syncreeper-sync.timer"]);
-<<<<<<< HEAD
-        const syncthingUnit = `syncthing@${DEFAULT_SERVICE_USER_LINUX}.service`;
-=======
-        const syncthing = asServiceUser("systemctl", ["--user", "status", "syncthing"]);
+        // Syncthing runs as a system-level templated unit (syncthing@<user>.service)
+        const syncthing = asSystemService("systemctl", [
+            "status",
+            `syncthing@${DEFAULT_SERVICE_USER_LINUX}.service`,
+        ]);
         const sshguard = asSystemService("systemctl", ["status", "sshguard"]);
         const ufw = asSystemService("ufw", ["status"]);
         const autoUpdates = asSystemService("systemctl", ["status", "unattended-upgrades"]);
->>>>>>> origin/main
 
         return [
             {
@@ -47,9 +42,9 @@ function getServiceChecks(): ServiceRow[] {
             },
             {
                 name: "Syncthing",
-                command: "systemctl",
-                args: ["status", syncthingUnit],
-                unit: syncthingUnit,
+                command: syncthing.command,
+                args: syncthing.args,
+                unit: `syncthing@${DEFAULT_SERVICE_USER_LINUX}.service`,
                 userLevel: false,
             },
             {
