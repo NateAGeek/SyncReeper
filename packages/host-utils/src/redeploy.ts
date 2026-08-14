@@ -265,10 +265,6 @@ async function restartLinux(serviceUser: string, currentUser: string): Promise<v
         // Running as root - use sudo -u to act as the service user
         const uid = (await execa("id", ["-u", serviceUser])).stdout.trim();
         const runtimeDir = `/run/user/${uid}`;
-        const env = {
-            XDG_RUNTIME_DIR: runtimeDir,
-            DBUS_SESSION_BUS_ADDRESS: `unix:path=${runtimeDir}/bus`,
-        };
 
         try {
             await execa(

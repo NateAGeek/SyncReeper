@@ -129,7 +129,7 @@ describe("Platform Detection Utilities", () => {
         });
 
         it("should return 'Unknown (...)' for unrecognized platform", () => {
-            const result = getPlatformDisplayName("freebsd" as any);
+            const result = getPlatformDisplayName("freebsd");
             expect(result).toBe("Unknown (freebsd)");
         });
 

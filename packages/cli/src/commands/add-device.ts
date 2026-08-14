@@ -136,16 +136,21 @@ export const addDeviceCommand: CommandModule = {
                 `config devices add --device-id "${normalizedDeviceId}" --name "${deviceName}"`,
                 serviceUser
             );
+            const listDevicesCmd = getSyncthingCliCommand("config devices list", serviceUser);
             const shareFolderCmd = getSyncthingCliCommand(
                 `config folders "${folderId}" devices add --device-id "${normalizedDeviceId}"`,
+                serviceUser
+            );
+            const listFolderDevicesCmd = getSyncthingCliCommand(
+                `config folders "${folderId}" devices list`,
                 serviceUser
             );
 
             const commands = [
                 `echo "Adding device: ${deviceName} (${normalizedDeviceId})..."`,
-                `${addDeviceCmd} 2>/dev/null || echo "Device may already exist"`,
+                `if ${listDevicesCmd} | grep -Fxq "${normalizedDeviceId}"; then echo "Device may already exist"; else ${addDeviceCmd}; fi`,
                 `echo "Sharing folder '${folderId}' with device..."`,
-                `${shareFolderCmd} 2>/dev/null || echo "Device may already be shared"`,
+                `if ${listFolderDevicesCmd} | grep -Fxq "${normalizedDeviceId}"; then echo "Device may already be shared"; else ${shareFolderCmd}; fi`,
                 `echo ""`,
                 `echo "Done! Device added successfully."`,
                 `echo "The remote device must also add this VPS to complete the connection."`,
@@ -178,9 +183,9 @@ export const addDeviceCommand: CommandModule = {
 
             const commands = [
                 `echo "Adding device: ${deviceName} (${normalizedDeviceId})..."`,
-                `syncthing cli config devices add --device-id "${normalizedDeviceId}" --name "${deviceName}" 2>/dev/null || echo "Device may already exist"`,
+                `if syncthing cli config devices list | grep -Fxq "${normalizedDeviceId}"; then echo "Device may already exist"; else syncthing cli config devices add --device-id "${normalizedDeviceId}" --name "${deviceName}"; fi`,
                 `echo "Sharing folder '${folderId}' with device..."`,
-                `syncthing cli config folders "${folderId}" devices add --device-id "${normalizedDeviceId}" 2>/dev/null || echo "Device may already be shared"`,
+                `if syncthing cli config folders "${folderId}" devices list | grep -Fxq "${normalizedDeviceId}"; then echo "Device may already be shared"; else syncthing cli config folders "${folderId}" devices add --device-id "${normalizedDeviceId}"; fi`,
                 `echo ""`,
                 `echo "Done! Device added successfully."`,
                 `echo "The remote device must also add this VPS to complete the connection."`,

@@ -11,17 +11,69 @@ import { input, password, confirm } from "@inquirer/prompts";
 import { execa } from "execa";
 import { getDefaultServiceUser } from "../utils/service-user.utils.js";
 
-async function runPulumiConfig(key: string, value: string, secret = false): Promise<void> {
-    const args = ["config", "set", `syncreeper:${key}`, value];
+interface ExistingConfigEntry {
+    secret?: boolean;
+    secure?: string;
+}
+
+export function getConfiguredKeys(config: Record<string, ExistingConfigEntry>): Set<string> {
+    return new Set(
+        Object.entries(config)
+            .filter(
+                ([key, entry]) =>
+                    key.startsWith("syncreeper:") &&
+                    (entry.secret === true || typeof entry.secure === "string" || "value" in entry)
+            )
+            .map(([key]) => key)
+    );
+}
+
+async function getExistingConfigKeys(): Promise<Set<string>> {
+    const result = await execa("pulumi", ["config", "--json", "--non-interactive"], {
+        reject: false,
+    });
+    if (result.exitCode !== 0 || !result.stdout.trim()) return new Set();
+
+    try {
+        const config = JSON.parse(result.stdout) as Record<string, ExistingConfigEntry>;
+        return getConfiguredKeys(config);
+    } catch {
+        return new Set();
+    }
+}
+
+async function runPulumiConfig(
+    key: string,
+    value: string,
+    existingKeys: Set<string>,
+    secret = false
+): Promise<void> {
+    const fullKey = `syncreeper:${key}`;
+    if (
+        existingKeys.has(fullKey) &&
+        !(await confirm({
+            message: `${fullKey} is already set. Replace it?`,
+            default: false,
+        }))
+    ) {
+        console.log(`Keeping existing ${fullKey}`);
+        return;
+    }
+
+    const args = ["config", "set", fullKey];
     if (secret) {
         args.push("--secret");
     }
-    await execa("pulumi", args, { stdio: "inherit" });
+    await execa("pulumi", args, { input: value, stdio: ["pipe", "inherit", "inherit"] });
 }
 
-async function runPulumiConfigJson(key: string, value: unknown): Promise<void> {
+async function runPulumiConfigJson(
+    key: string,
+    value: unknown,
+    existingKeys: Set<string>
+): Promise<void> {
     const jsonValue = JSON.stringify(value);
-    await execa("pulumi", ["config", "set", `syncreeper:${key}`, jsonValue], { stdio: "inherit" });
+    await runPulumiConfig(key, jsonValue, existingKeys);
 }
 
 async function checkPulumiStack(): Promise<boolean> {
@@ -196,15 +248,17 @@ export const setupCommand: CommandModule = {
         // Save configuration
         console.log("\nSaving configuration...\n");
 
-        await runPulumiConfig("service-user", serviceUser);
-        await runPulumiConfig("github-username", githubUsername);
-        await runPulumiConfig("github-token", githubToken, true);
-        await runPulumiConfig("syncthing-api-key", syncthingApiKey, true);
-        await runPulumiConfigJson("syncthing-trusted-devices", trustedDevices);
-        await runPulumiConfigJson("ssh-authorized-keys", sshKeys);
-        await runPulumiConfig("sync-schedule", syncSchedule);
-        await runPulumiConfig("repos-path", reposPath);
-        await runPulumiConfig("syncthing-folder-id", syncthingFolderId);
+        const existingKeys = await getExistingConfigKeys();
+
+        await runPulumiConfig("service-user", serviceUser, existingKeys);
+        await runPulumiConfig("github-username", githubUsername, existingKeys);
+        await runPulumiConfig("github-token", githubToken, existingKeys, true);
+        await runPulumiConfig("syncthing-api-key", syncthingApiKey, existingKeys, true);
+        await runPulumiConfigJson("syncthing-trusted-devices", trustedDevices, existingKeys);
+        await runPulumiConfigJson("ssh-authorized-keys", sshKeys, existingKeys);
+        await runPulumiConfig("sync-schedule", syncSchedule, existingKeys);
+        await runPulumiConfig("repos-path", reposPath, existingKeys);
+        await runPulumiConfig("syncthing-folder-id", syncthingFolderId, existingKeys);
 
         console.log("\nConfiguration saved successfully!\n");
         console.log("Next steps:");

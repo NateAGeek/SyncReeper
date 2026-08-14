@@ -233,7 +233,27 @@ function Main {
         Write-Success "Pulumi configured with local backend"
     }
     
+    # Check for existing configuration without decrypting secrets
+    $configJson = pulumi config --json --non-interactive 2>$null | Out-String
+    $skipSetup = $false
+    if ($configJson -match '"syncreeper:') {
+        Write-Success "Existing Pulumi configuration found. Secrets will not be displayed."
+        Write-Host ""
+        Write-Host "  1) Keep existing configuration and continue"
+        Write-Host "  2) Review values and replace selected entries"
+        Write-Host "  3) Exit installation"
+        $choice = Read-Host "Enter choice [1-3] (default: 1)"
+        if ([string]::IsNullOrWhiteSpace($choice)) { $choice = "1" }
+        switch ($choice) {
+            "1" { $skipSetup = $true }
+            "2" { $skipSetup = $false }
+            "3" { Write-Info "Exiting installation. Existing configuration is preserved."; exit 0 }
+            default { Write-Warn "Invalid choice, keeping existing configuration"; $skipSetup = $true }
+        }
+    }
+
     # Run interactive setup
+    if (-not $skipSetup) {
     Write-Host ""
     Write-Host "==========================================" -ForegroundColor Cyan
     Write-Host "       SyncReeper Configuration           " -ForegroundColor Cyan
@@ -244,6 +264,7 @@ function Main {
     Write-Host ""
     
     pnpm run setup
+    }
     
     # Done
     Write-Host ""

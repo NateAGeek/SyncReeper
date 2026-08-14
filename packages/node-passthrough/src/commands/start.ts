@@ -8,7 +8,7 @@
 import { existsSync } from "node:fs";
 import { execa } from "execa";
 
-import { loadConfig, getPlistPath, DEFAULTS } from "../config.js";
+import { loadConfig, getPlistPath } from "../config.js";
 import { generatePlistFromConfig } from "./helpers.js";
 
 /**

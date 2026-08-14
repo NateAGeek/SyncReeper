@@ -15,78 +15,81 @@ export interface KeyboardHandlers {
     onRegenerateStignore?: () => void;
 }
 
-export function useKeyboard(handlers: KeyboardHandlers): void {
-    useInput((input, key) => {
-        // Tab navigation
-        if (key.tab && !key.shift) {
-            handlers.onTabNext?.();
-            return;
-        }
-        if (key.tab && key.shift) {
-            handlers.onTabPrev?.();
-            return;
-        }
+export function useKeyboard(handlers: KeyboardHandlers, isActive = true): void {
+    useInput(
+        (input, key) => {
+            // Tab navigation
+            if (key.tab && !key.shift) {
+                handlers.onTabNext?.();
+                return;
+            }
+            if (key.tab && key.shift) {
+                handlers.onTabPrev?.();
+                return;
+            }
 
-        // Arrow-based tab navigation
-        if (key.rightArrow && key.ctrl) {
-            handlers.onTabNext?.();
-            return;
-        }
-        if (key.leftArrow && key.ctrl) {
-            handlers.onTabPrev?.();
-            return;
-        }
+            // Arrow-based tab navigation
+            if (key.rightArrow && key.ctrl) {
+                handlers.onTabNext?.();
+                return;
+            }
+            if (key.leftArrow && key.ctrl) {
+                handlers.onTabPrev?.();
+                return;
+            }
 
-        // Scroll
-        if (input === "j" || key.downArrow) {
-            handlers.onScrollDown?.();
-            return;
-        }
-        if (input === "k" || key.upArrow) {
-            handlers.onScrollUp?.();
-            return;
-        }
+            // Scroll
+            if (input === "j" || key.downArrow) {
+                handlers.onScrollDown?.();
+                return;
+            }
+            if (input === "k" || key.upArrow) {
+                handlers.onScrollUp?.();
+                return;
+            }
 
-        // Jump scroll
-        if (input === "G") {
-            handlers.onScrollBottom?.();
-            return;
-        }
-        if (input === "g") {
-            handlers.onScrollTop?.();
-            return;
-        }
+            // Jump scroll
+            if (input === "G") {
+                handlers.onScrollBottom?.();
+                return;
+            }
+            if (input === "g") {
+                handlers.onScrollTop?.();
+                return;
+            }
 
-        // Refresh
-        if (input === "r") {
-            handlers.onRefresh?.();
-            return;
-        }
+            // Refresh
+            if (input === "r") {
+                handlers.onRefresh?.();
+                return;
+            }
 
-        // Quit
-        if (input === "q") {
-            handlers.onQuit?.();
-            return;
-        }
+            // Quit
+            if (input === "q") {
+                handlers.onQuit?.();
+                return;
+            }
 
-        // Service actions
-        if (input === "s") {
-            handlers.onServiceStart?.();
-            return;
-        }
-        if (input === "x") {
-            handlers.onServiceStop?.();
-            return;
-        }
-        if (input === "R") {
-            handlers.onServiceRestart?.();
-            return;
-        }
+            // Service actions
+            if (input === "s") {
+                handlers.onServiceStart?.();
+                return;
+            }
+            if (input === "x") {
+                handlers.onServiceStop?.();
+                return;
+            }
+            if (input === "R") {
+                handlers.onServiceRestart?.();
+                return;
+            }
 
-        // Regenerate .stignore
-        if (input === "I") {
-            handlers.onRegenerateStignore?.();
-            return;
-        }
-    });
+            // Regenerate .stignore
+            if (input === "I") {
+                handlers.onRegenerateStignore?.();
+                return;
+            }
+        },
+        { isActive }
+    );
 }

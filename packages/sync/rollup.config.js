@@ -32,6 +32,7 @@ export default {
             tsconfig: "./tsconfig.json",
             declaration: false,
             declarationMap: false,
+            sourceMap: false,
         }),
     ],
     // Don't bundle Node.js built-in modules

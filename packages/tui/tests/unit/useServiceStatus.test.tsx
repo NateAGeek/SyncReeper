@@ -45,6 +45,7 @@ function StatusHarness({
             <Text>status:{result.status}</Text>
             <Text>loading:{result.isLoading.toString()}</Text>
             <Text>output:{result.output.substring(0, 100)}</Text>
+            <Text>diagnostic:{result.diagnostic}</Text>
         </Box>
     );
 }
@@ -99,6 +100,23 @@ describe("useServiceStatus", () => {
 
         await waitForEffects();
         expect(instance.lastFrame()).toContain("status:stopped");
+        instance.unmount();
+    });
+
+    it("should classify a failed oneshot as an error and preserve the reason", async () => {
+        mockExeca.mockResolvedValue({
+            exitCode: 3,
+            stdout: "Active: failed (Result: exit-code)\nProcess: 42 (code=exited, status=1/FAILURE)",
+            stderr: "",
+        });
+
+        const instance = render(
+            <StatusHarness command="systemctl" args={["status", "sync"]} refreshTrigger={0} />
+        );
+
+        await waitForEffects();
+        expect(instance.lastFrame()).toContain("status:error");
+        expect(instance.lastFrame()).toContain("Active: failed");
         instance.unmount();
     });
 

@@ -14,6 +14,7 @@ export function SecurityTab({
     scrollOffset,
     serviceActionTrigger,
     onActionUpdate,
+    config,
 }: TabActionProps): React.ReactElement {
     const [firewallLines, setFirewallLines] = useState<string[]>([]);
     const [blockedIps, setBlockedIps] = useState<string[]>([]);
@@ -153,10 +154,25 @@ export function SecurityTab({
         }
 
         fetchSecurity();
+
+        return () => {
+            cancelled = true;
+        };
     }, [refreshTrigger]);
 
     // Combine all security info into log lines for scrolling
     const allLines = [
+        `Configured SSH keys: ${(() => {
+            try {
+                const value = JSON.parse(
+                    config?.values["syncreeper:ssh-authorized-keys"] ?? "[]"
+                ) as unknown;
+                return Array.isArray(value) ? value.length : 0;
+            } catch {
+                return 0;
+            }
+        })()}`,
+        "",
         "-- SSHGuard Blocked IPs --",
         ...blockedIps,
         "",

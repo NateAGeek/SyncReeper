@@ -5,13 +5,20 @@ import { LogViewer } from "../components/LogViewer.js";
 import { useServiceStatus } from "../hooks/useServiceStatus.js";
 import { useServiceAction } from "../hooks/useServiceAction.js";
 import { useLogs } from "../hooks/useLogs.js";
-import { isLinux, isMacOS, getHomeDirectory } from "@syncreeper/shared";
+import { isLinux, isMacOS, getHomeDirectory, DEFAULT_SERVICE_USER_LINUX } from "@syncreeper/shared";
 import { asServiceUser, asJournalctl } from "../utils/userCommand.utils.js";
 import type { TabActionProps } from "../types.js";
 
-function getTimerStatusCommand(): { command: string; args: string[] } {
+function getTimerStatusCommand(serviceUser = DEFAULT_SERVICE_USER_LINUX): {
+    command: string;
+    args: string[];
+} {
     if (isLinux()) {
-        return asServiceUser("systemctl", ["--user", "status", "syncreeper-sync.timer"]);
+        return asServiceUser(
+            "systemctl",
+            ["--user", "status", "syncreeper-sync.timer"],
+            serviceUser
+        );
     }
     if (isMacOS()) {
         return { command: "launchctl", args: ["list", "com.syncreeper.sync"] };
@@ -19,9 +26,16 @@ function getTimerStatusCommand(): { command: string; args: string[] } {
     return { command: "echo", args: ["unsupported platform"] };
 }
 
-function getServiceStatusCommand(): { command: string; args: string[] } {
+function getServiceStatusCommand(serviceUser = DEFAULT_SERVICE_USER_LINUX): {
+    command: string;
+    args: string[];
+} {
     if (isLinux()) {
-        return asServiceUser("systemctl", ["--user", "status", "syncreeper-sync.service"]);
+        return asServiceUser(
+            "systemctl",
+            ["--user", "status", "syncreeper-sync.service"],
+            serviceUser
+        );
     }
     if (isMacOS()) {
         return { command: "launchctl", args: ["list", "com.syncreeper.sync"] };
@@ -80,9 +94,10 @@ export function GithubSyncTab({
     scrollOffset,
     serviceActionTrigger,
     onActionUpdate,
+    config,
 }: TabActionProps): React.ReactElement {
-    const timerCmd = getTimerStatusCommand();
-    const serviceCmd = getServiceStatusCommand();
+    const timerCmd = getTimerStatusCommand(config?.serviceUser);
+    const serviceCmd = getServiceStatusCommand(config?.serviceUser);
     const logCmd = getLogCommand();
 
     const timerStatus = useServiceStatus(timerCmd.command, timerCmd.args, refreshTrigger);
@@ -90,6 +105,15 @@ export function GithubSyncTab({
     const logs = useLogs(logCmd.command, logCmd.args, refreshTrigger);
 
     const timerInfo = useMemo(() => parseTimerInfo(timerStatus.output), [timerStatus.output]);
+    const latestError = useMemo(
+        () =>
+            [...logs.lines]
+                .reverse()
+                .find((line) =>
+                    /bad credentials|\b401\b|fatal error|permission denied/i.test(line)
+                ),
+        [logs.lines]
+    );
 
     // Two action targets:
     //   "start" -> starts the .service (triggers an immediate sync run)
@@ -99,11 +123,13 @@ export function GithubSyncTab({
 
     const timerAction = useServiceAction({
         ...timerUnit,
+        serviceUser: config?.serviceUser,
         onSuccess: timerStatus.refresh,
     });
 
     const serviceRunAction = useServiceAction({
         ...serviceUnit,
+        serviceUser: config?.serviceUser,
         onSuccess: () => {
             serviceStatus.refresh();
             timerStatus.refresh();
@@ -139,11 +165,34 @@ export function GithubSyncTab({
                     <StatusBadge status={timerStatus.status} />
                 </Box>
 
+                {serviceStatus.diagnostic && serviceStatus.status === "error" && (
+                    <Text color="red">Reason: {serviceStatus.diagnostic}</Text>
+                )}
+
+                {latestError && <Text color="red">Latest error: {latestError}</Text>}
+
                 <Box gap={1}>
                     <Text bold>Service:</Text>
                     <Text>syncreeper-sync.service</Text>
                     <StatusBadge status={serviceStatus.status} />
                 </Box>
+
+                {config && (
+                    <Box gap={2}>
+                        <Text>
+                            <Text bold>User:</Text>{" "}
+                            {config.values["syncreeper:github-username"] ?? "not configured"}
+                        </Text>
+                        <Text>
+                            <Text bold>Schedule:</Text>{" "}
+                            {config.values["syncreeper:sync-schedule"] ?? "daily"}
+                        </Text>
+                        <Text>
+                            <Text bold>Repos:</Text>{" "}
+                            {config.values["syncreeper:repos-path"] ?? "not configured"}
+                        </Text>
+                    </Box>
+                )}
 
                 {timerInfo.nextRun !== "unknown" && (
                     <Box gap={1}>

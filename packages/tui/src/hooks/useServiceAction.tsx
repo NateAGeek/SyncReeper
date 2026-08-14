@@ -22,6 +22,8 @@ export interface ServiceActionOptions {
     launchctlLabel?: string;
     /** Callback fired after a successful action (e.g. to refresh status) */
     onSuccess?: () => void;
+    /** Linux account that owns a user-level service. */
+    serviceUser?: string;
 }
 
 /**
@@ -33,7 +35,7 @@ export interface ServiceActionOptions {
  * - macOS services:        launchctl kickstart/kill -k <domain>/<label>
  */
 export function useServiceAction(options: ServiceActionOptions): ServiceActionResult {
-    const { unit, userLevel, launchctlLabel, onSuccess } = options;
+    const { unit, userLevel, launchctlLabel, onSuccess, serviceUser } = options;
     const [actionStatus, setActionStatus] = useState<ActionStatus>("idle");
     const [message, setMessage] = useState("");
 
@@ -54,7 +56,11 @@ export function useServiceAction(options: ServiceActionOptions): ServiceActionRe
                         if (userLevel) {
                             // Use asServiceUser so it works correctly when root
                             // or as the service user without D-Bus env vars
-                            const wrapped = asServiceUser("systemctl", ["--user", action, unit]);
+                            const wrapped = asServiceUser(
+                                "systemctl",
+                                ["--user", action, unit],
+                                serviceUser
+                            );
                             command = wrapped.command;
                             fullArgs = wrapped.args;
                         } else {
@@ -142,7 +148,7 @@ export function useServiceAction(options: ServiceActionOptions): ServiceActionRe
                 }, 4000);
             })();
         },
-        [unit, userLevel, launchctlLabel, onSuccess, actionStatus]
+        [unit, userLevel, launchctlLabel, onSuccess, serviceUser, actionStatus]
     );
 
     return { actionStatus, message, run };

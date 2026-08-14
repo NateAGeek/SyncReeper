@@ -29,7 +29,11 @@ export function generateSyncthingCliConfigScript(
             return `
 # Add trusted device: ${deviceName}
 echo "Adding device: ${deviceName} (${deviceId})..."
-sudo -u ${username} syncthing cli config devices add --device-id "${deviceId}" --name "${deviceName}" 2>/dev/null || echo "Device may already exist, continuing..."`;
+if sudo -u ${username} syncthing cli config devices list | grep -Fxq "${deviceId}"; then
+    echo "Device already exists, continuing..."
+else
+    sudo -u ${username} syncthing cli config devices add --device-id "${deviceId}" --name "${deviceName}"
+fi`;
         })
         .join("\n");
 
@@ -40,7 +44,11 @@ sudo -u ${username} syncthing cli config devices add --device-id "${deviceId}" -
             return `
 # Share folder with ${deviceName}
 echo "Sharing folder '${folderId}' with ${deviceName}..."
-sudo -u ${username} syncthing cli config folders "${folderId}" devices add --device-id "${deviceId}" 2>/dev/null || echo "Device may already be shared, continuing..."`;
+if sudo -u ${username} syncthing cli config folders "${folderId}" devices list | grep -Fxq "${deviceId}"; then
+    echo "Device is already shared, continuing..."
+else
+    sudo -u ${username} syncthing cli config folders "${folderId}" devices add --device-id "${deviceId}"
+fi`;
         })
         .join("\n");
 
@@ -57,7 +65,13 @@ sudo -u ${username} syncthing cli config folders remove "default" 2>/dev/null ||
 # Create the repos folder
 echo ""
 echo "Creating folder: ${folderId}"
-sudo -u ${username} syncthing cli config folders add --id "${folderId}" --path "${reposPath}" --label "${folderLabel}" 2>/dev/null || echo "Folder may already exist, continuing..."
+if sudo -u ${username} syncthing cli config folders list | grep -Fxq "${folderId}"; then
+    echo "Folder already exists, updating its path and label..."
+    sudo -u ${username} syncthing cli config folders "${folderId}" path set "${reposPath}"
+    sudo -u ${username} syncthing cli config folders "${folderId}" label set "${folderLabel}"
+else
+    sudo -u ${username} syncthing cli config folders add --id "${folderId}" --path "${reposPath}" --label "${folderLabel}"
+fi
 
 # Add trusted devices
 echo ""

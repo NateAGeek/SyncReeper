@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import { StatusBadge } from "../components/StatusBadge.js";
 import { LogViewer } from "../components/LogViewer.js";
@@ -10,9 +10,10 @@ import type { TabActionProps } from "../types.js";
 export function PassthroughTab({
     refreshTrigger,
     scrollOffset,
+    config,
 }: TabActionProps): React.ReactElement {
     const [userExists, setUserExists] = useState<boolean | null>(null);
-    const [tunnelPort, setTunnelPort] = useState<string>("2222");
+    const tunnelPort = config?.values["syncreeper:passthrough-port"] ?? "2222";
     const [connections, setConnections] = useState<string[]>([]);
     const [logLines, setLogLines] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -104,6 +105,10 @@ export function PassthroughTab({
         }
 
         fetchStatus();
+
+        return () => {
+            cancelled = true;
+        };
     }, [refreshTrigger, tunnelPort]);
 
     return (
@@ -126,6 +131,17 @@ export function PassthroughTab({
                     <Text bold>Tunnel Port:</Text>
                     <Text>{tunnelPort}</Text>
                 </Box>
+
+                {config && (
+                    <Box gap={1}>
+                        <Text bold>Configured:</Text>
+                        <Text>
+                            {config.values["syncreeper:passthrough-enabled"] === "true"
+                                ? "enabled"
+                                : "disabled"}
+                        </Text>
+                    </Box>
+                )}
 
                 <Box marginTop={1}>
                     <Text dimColor>No controllable service on this tab</Text>

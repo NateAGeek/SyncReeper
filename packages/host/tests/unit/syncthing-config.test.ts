@@ -66,6 +66,8 @@ describe("Syncthing CLI Config Script Generation", () => {
             expect(script).toContain('--id "my-repos"');
             expect(script).toContain('--path "/data/repos"');
             expect(script).toContain('--label "GitHub Repositories"');
+            expect(script).toContain('config folders list | grep -Fxq "my-repos"');
+            expect(script).toContain('config folders "my-repos" path set "/data/repos"');
         });
 
         it("should use sudo -u username for syncthing CLI commands", () => {
@@ -91,6 +93,9 @@ describe("Syncthing CLI Config Script Generation", () => {
 
             expect(script).toContain('folders "repos" devices add');
             expect(script).toContain('--device-id "DEVICE-AAA-111"');
+            expect(script).toContain(
+                'config folders "repos" devices list | grep -Fxq "DEVICE-AAA-111"'
+            );
         });
 
         it("should handle empty trusted devices array", () => {
@@ -107,9 +112,10 @@ describe("Syncthing CLI Config Script Generation", () => {
             expect(script).toContain("sudo -u myuser");
         });
 
-        it("should include error-tolerant device add (|| echo continuation)", () => {
+        it("should check before adding an existing device", () => {
             const script = generateLinuxScript(["DEV-1"], "repos", "/srv/repos", "syncreeper");
-            expect(script).toContain('|| echo "Device may already exist');
+            expect(script).toContain('config devices list | grep -Fxq "DEV-1"');
+            expect(script).toContain("Device already exists, continuing");
         });
     });
 

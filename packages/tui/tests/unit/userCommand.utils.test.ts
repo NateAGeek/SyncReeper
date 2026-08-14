@@ -294,6 +294,30 @@ describe("userCommand.utils", () => {
             // execaSync should only be called once due to caching
             expect(mockExecaSync).toHaveBeenCalledTimes(1);
         });
+
+        it("should resolve and cache configured service users independently", () => {
+            mockIsLinux.mockReturnValue(true);
+            mockUserInfo.mockReturnValue({
+                username: "root",
+                uid: 0,
+                gid: 0,
+                shell: "/bin/bash",
+                homedir: "/root",
+            });
+            mockExecaSync
+                .mockReturnValueOnce({ stdout: "1001" })
+                .mockReturnValueOnce({ stdout: "1002" });
+
+            const first = asServiceUser("systemctl", ["--user", "status", "one"], "sync-one");
+            const second = asServiceUser("systemctl", ["--user", "status", "two"], "sync-two");
+            asServiceUser("systemctl", ["--user", "status", "one"], "sync-one");
+
+            expect(first.args).toContain("sync-one");
+            expect(first.args).toContain("XDG_RUNTIME_DIR=/run/user/1001");
+            expect(second.args).toContain("sync-two");
+            expect(second.args).toContain("XDG_RUNTIME_DIR=/run/user/1002");
+            expect(mockExecaSync).toHaveBeenCalledTimes(2);
+        });
     });
 
     describe("asJournalctl()", () => {

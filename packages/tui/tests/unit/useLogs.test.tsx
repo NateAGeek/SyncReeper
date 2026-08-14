@@ -128,6 +128,36 @@ describe("useLogs", () => {
         instance.unmount();
     });
 
+    it("should display stderr when a log command exits nonzero", async () => {
+        mockExeca.mockResolvedValue({
+            exitCode: 1,
+            stdout: "",
+            stderr: "Failed to open journal: Permission denied",
+        });
+
+        const instance = render(<LogsHarness command="journalctl" args={[]} refreshTrigger={0} />);
+
+        await waitForEffects();
+        expect(instance.lastFrame()).toContain("exit 1");
+        expect(instance.lastFrame()).toContain("Permission denied");
+        instance.unmount();
+    });
+
+    it("should redact GitHub tokens from logs", async () => {
+        mockExeca.mockResolvedValue({
+            exitCode: 0,
+            stdout: "request failed for github_pat_12345678901234567890",
+            stderr: "",
+        });
+
+        const instance = render(<LogsHarness command="journalctl" args={[]} refreshTrigger={0} />);
+
+        await waitForEffects();
+        expect(instance.lastFrame()).toContain("[REDACTED]");
+        expect(instance.lastFrame()).not.toContain("github_pat_");
+        instance.unmount();
+    });
+
     it("should handle whitespace-only output as empty", async () => {
         mockExeca.mockResolvedValue({
             exitCode: 0,

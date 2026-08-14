@@ -367,33 +367,21 @@ main() {
     if pulumi stack --show-name &> /dev/null; then
         STACK_NAME=$(pulumi stack --show-name 2>/dev/null)
 
-        # Check for key configuration values
-        GITHUB_USER=$(pulumi config get syncreeper:github-username 2>/dev/null || echo "")
-        GITHUB_TOKEN=$(pulumi config get syncreeper:github-token 2>/dev/null || echo "")
+        # Check for any existing configuration without decrypting secrets.
+        CONFIG_JSON=$(pulumi config --json --non-interactive 2>/dev/null || echo "")
 
-        if [[ -n "$GITHUB_USER" ]] && [[ -n "$GITHUB_TOKEN" ]]; then
+        if printf '%s' "$CONFIG_JSON" | grep -q '"syncreeper:'; then
             EXISTING_CONFIG=true
             success "Found existing configuration in stack: $STACK_NAME"
             echo ""
-            info "Current configuration:"
-            echo "  GitHub Username:     $GITHUB_USER"
-            echo "  GitHub Token:        [secret]"
-
-            # Show other config values if they exist
-            REPOS_PATH=$(pulumi config get syncreeper:repos-path 2>/dev/null || echo "/srv/repos")
-            SYNC_SCHEDULE=$(pulumi config get syncreeper:sync-schedule 2>/dev/null || echo "daily")
-            FOLDER_ID=$(pulumi config get syncreeper:syncthing-folder-id 2>/dev/null || echo "repos")
-
-            echo "  Repos Path:          $REPOS_PATH"
-            echo "  Sync Schedule:       $SYNC_SCHEDULE"
-            echo "  Syncthing Folder ID: $FOLDER_ID"
+            info "Existing values were found. Secrets will not be displayed."
             echo ""
 
             # Ask user what to do
             echo "What would you like to do?"
             echo ""
             echo "  1) Keep existing configuration and continue"
-            echo "  2) Reconfigure from scratch (run setup wizard)"
+            echo "  2) Review values and replace selected entries (run setup wizard)"
             echo "  3) Exit installation"
             echo ""
             read -p "Enter choice [1-3] (default: 1): " CONFIG_CHOICE

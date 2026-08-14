@@ -8,7 +8,9 @@ import { GithubSyncTab } from "./tabs/GithubSyncTab.js";
 import { SyncthingTab } from "./tabs/SyncthingTab.js";
 import { PassthroughTab } from "./tabs/PassthroughTab.js";
 import { SecurityTab } from "./tabs/SecurityTab.js";
+import { ConfigTab } from "./tabs/ConfigTab.js";
 import { useKeyboard } from "./hooks/useKeyboard.js";
+import { useConfig } from "./hooks/useConfig.js";
 import type { ServiceAction } from "./hooks/useServiceAction.js";
 import type { ActionStatus } from "./hooks/useServiceAction.js";
 import { resolveReposPath, runRegenerateStignore } from "./utils/stignore.utils.js";
@@ -19,6 +21,7 @@ const TABS = [
     { label: "Syncthing", key: "syncthing" },
     { label: "Passthrough", key: "passthrough" },
     { label: "Security", key: "security" },
+    { label: "Config", key: "config" },
 ] as const;
 
 export interface AppProps {
@@ -30,6 +33,8 @@ export function App({ version = "1.0.0" }: AppProps): React.ReactElement {
     const [activeTab, setActiveTab] = useState(0);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [scrollOffset, setScrollOffset] = useState(0);
+    const [isEditingConfig, setIsEditingConfig] = useState(false);
+    const config = useConfig(refreshTrigger);
 
     // Service action state — bubbled up from tabs via onActionUpdate
     const [actionStatus, setActionStatus] = useState<ActionStatus>("idle");
@@ -117,20 +122,23 @@ export function App({ version = "1.0.0" }: AppProps): React.ReactElement {
         setActionMessage(message);
     }, []);
 
-    useKeyboard({
-        onTabNext: handleTabNext,
-        onTabPrev: handleTabPrev,
-        onScrollDown: handleScrollDown,
-        onScrollUp: handleScrollUp,
-        onScrollTop: handleScrollTop,
-        onScrollBottom: handleScrollBottom,
-        onRefresh: handleRefresh,
-        onQuit: handleQuit,
-        onServiceStart: handleServiceStart,
-        onServiceStop: handleServiceStop,
-        onServiceRestart: handleServiceRestart,
-        onRegenerateStignore: handleRegenerateStignore,
-    });
+    useKeyboard(
+        {
+            onTabNext: handleTabNext,
+            onTabPrev: handleTabPrev,
+            onScrollDown: handleScrollDown,
+            onScrollUp: handleScrollUp,
+            onScrollTop: handleScrollTop,
+            onScrollBottom: handleScrollBottom,
+            onRefresh: handleRefresh,
+            onQuit: handleQuit,
+            onServiceStart: handleServiceStart,
+            onServiceStop: handleServiceStop,
+            onServiceRestart: handleServiceRestart,
+            onRegenerateStignore: handleRegenerateStignore,
+        },
+        !isEditingConfig
+    );
 
     const renderActiveTab = (): React.ReactElement => {
         const tabKey = TABS[activeTab]!.key;
@@ -139,6 +147,7 @@ export function App({ version = "1.0.0" }: AppProps): React.ReactElement {
             scrollOffset,
             serviceActionTrigger,
             onActionUpdate: handleActionUpdate,
+            config: config.snapshot,
         };
 
         switch (tabKey) {
@@ -152,6 +161,18 @@ export function App({ version = "1.0.0" }: AppProps): React.ReactElement {
                 return <PassthroughTab {...actionProps} />;
             case "security":
                 return <SecurityTab {...actionProps} />;
+            case "config":
+                return (
+                    <ConfigTab
+                        snapshot={config.snapshot}
+                        error={config.error}
+                        isLoading={config.isLoading}
+                        isActive
+                        onRefresh={config.refresh}
+                        onEditingChange={setIsEditingConfig}
+                        onActionUpdate={handleActionUpdate}
+                    />
+                );
             default:
                 return <Text>Unknown tab</Text>;
         }
@@ -184,7 +205,15 @@ export function App({ version = "1.0.0" }: AppProps): React.ReactElement {
             </Box>
 
             <ActionBar actionStatus={actionStatus} message={actionMessage} />
-            <KeyHints />
+            <KeyHints
+                mode={
+                    isEditingConfig
+                        ? "input"
+                        : TABS[activeTab]?.key === "config"
+                          ? "config"
+                          : "dashboard"
+                }
+            />
         </Box>
     );
 }

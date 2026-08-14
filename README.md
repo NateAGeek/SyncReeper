@@ -64,10 +64,11 @@ GitHub ──(API)──> VPS / Mac ──(Syncthing)──> Laptop, Desktop, NA
 
 ### Terminal Dashboard (TUI)
 
-- 5 tabbed views: Overview, GitHub Sync, Syncthing, Passthrough, Security
+- 6 tabbed views: Overview, GitHub Sync, Syncthing, Passthrough, Security, Config
 - Real-time service status polling (systemctl / launchctl)
-- Log streaming from journalctl / log files
+- Error-aware logs from journalctl / log files, including stderr and exit status
 - Service actions: Start, Stop, Restart from within tabs
+- Pulumi configuration viewer and editor with masked GitHub token rotation
 - Keyboard navigation: Tab/Shift-Tab, j/k scroll, G/g jump, q quit, r refresh
 - Colored status badges: RUNNING, STOPPED, ERROR, ACTIVE, ENABLED, DISABLED
 - Root-user detection with automatic `sudo -u` command wrapping
@@ -139,6 +140,17 @@ All configuration is stored in Pulumi config. View current settings with `pulumi
 | `syncreeper:passthrough-authorized-keys` | --           | SSH keys for tunnel user          |
 
 ### Modifying Configuration
+
+The Config tab groups editable values by service. Select a value with `j`/`k` and press `e`
+or Enter. GitHub token rotation is entered twice, never displayed, applied through Pulumi, and
+starts an immediate sync. Run the Linux dashboard as root with the deployment's Pulumi secrets
+provider environment available. Other edits update Pulumi's source of truth and require
+`pulumi up` before infrastructure changes take effect.
+
+The setup wizard also checks each existing value before writing it. Existing public values and
+encrypted values are never replaced unless you confirm that individual replacement. If Pulumi
+requires its secrets passphrase during a dashboard update, the dashboard requests it through a
+masked prompt and uses it only for that operation.
 
 ```bash
 # Update a value
