@@ -96,6 +96,14 @@ describe("Stignore Utilities", () => {
             expect(trailingSlashPatterns).toEqual([]);
         });
 
+        it("should not use inline comments on active patterns", () => {
+            const activeLines = content
+                .split("\n")
+                .filter((line) => !line.startsWith("//") && line.trim() !== "");
+
+            expect(activeLines.filter((line) => line.includes("//"))).toEqual([]);
+        });
+
         it("should include gitignore section markers", () => {
             expect(content).toContain(GITIGNORE_SECTION_START);
             expect(content).toContain(GITIGNORE_SECTION_END);
@@ -132,10 +140,10 @@ describe("Stignore Utilities", () => {
 
         // Cross-reference comments on shared patterns
         it("should have cross-reference comments on shared patterns", () => {
-            expect(content).toMatch(/\*\*\/dist\s+\/\/ Also:/);
-            expect(content).toMatch(/\*\*\/build\s+\/\/ Also:/);
-            expect(content).toMatch(/\*\*\/target\s+\/\/ Also:/);
-            expect(content).toMatch(/\*\*\/vendor\s+\/\/ Also:/);
+            expect(content).toMatch(/\/\/ Also covers Python[^\n]*\n\*\*\/dist/);
+            expect(content).toMatch(/\/\/ Also covers Gradle[^\n]*\n\*\*\/build/);
+            expect(content).toMatch(/\/\/ Also covers Maven[^\n]*\n\*\*\/target/);
+            expect(content).toMatch(/\/\/ Also covers PHP[^\n]*\n\*\*\/vendor/);
         });
 
         // Spot check key language patterns

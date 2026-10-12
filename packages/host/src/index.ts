@@ -36,6 +36,10 @@ import { createDirectories } from "./resources/directories";
 import { setupPackages } from "./services/packages/index";
 import { setupFirewall } from "./services/firewall/index";
 import { setupSSH } from "./services/ssh/index";
+import {
+    getSSHLoginNotificationConfig,
+    setupSSHLoginNotification,
+} from "./services/ssh/login-notification";
 import { setupSSHGuard } from "./services/sshguard/index";
 import { setupAutoUpdates } from "./services/auto-updates/index";
 import { setupGitHubSync } from "./services/github-sync/index";
@@ -56,6 +60,7 @@ assertSupportedPlatform();
 // This must happen before getServiceUser()/getPaths() so the configured
 // service-user is available for path resolution
 const config = getConfig();
+const sshLoginNotification = getSSHLoginNotificationConfig();
 
 // Get platform-aware configuration (now uses the configured service-user)
 const platformName = getPlatformDisplayName();
@@ -99,6 +104,9 @@ const _firewall = setupFirewall({
 });
 
 // Harden SSH configuration (Linux only - on macOS, SSH is managed by System Preferences)
+if (sshLoginNotification) {
+    setupSSHLoginNotification(sshLoginNotification, packages.resources);
+}
 if (isLinux()) {
     const _ssh = setupSSH({
         authorizedKeys: config.ssh.authorizedKeys,

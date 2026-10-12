@@ -49,6 +49,7 @@ GitHub ──(API)──> VPS / Mac ──(Syncthing)──> Laptop, Desktop, NA
 
 - **Firewall**: UFW (Linux) / pf (macOS) -- default deny inbound, allow outbound, SSH rate-limiting
 - **SSH Hardening**: Key-only authentication, password auth disabled, root login disabled, restricted to service user
+- **SSH Login Notifications**: Optional ntfy push alerts for every successful SSH authentication (Linux)
 - **Brute-Force Protection**: SSHGuard with 2-hour block time, 1.5x multiplier, progressive bans
 - **Auto-Updates**: Unattended security upgrades with auto-reboot at 3 AM (Linux)
 - **Systemd Sandboxing**: `ProtectSystem=strict`, private `/tmp`, limited write paths
@@ -142,6 +143,58 @@ All configuration is stored in Pulumi config. View current settings with `pulumi
 | `syncreeper:passthrough-enabled`         | `false`      | Enable reverse SSH tunnel         |
 | `syncreeper:passthrough-port`            | `2222`       | Tunnel port on VPS                |
 | `syncreeper:passthrough-authorized-keys` | --           | SSH keys for tunnel user          |
+
+### SSH Login Push Notifications (Linux)
+
+Notifications are disabled by default; no topic or credentials are included in
+the repository. Install the ntfy phone app and subscribe to your own topic on
+`https://ntfy.sh` (or your self-hosted ntfy server), then configure that same topic
+as a Pulumi secret and deploy. This uses HTTPS and requires no SMTP server:
+
+```bash
+pulumi config set --secret syncreeper:ssh-login-ntfy-topic
+pnpm run pulumi
+```
+
+The command prompts for your topic instead of recording it in shell history.
+Topics support 1–64 letters, numbers, underscores, or hyphens. Optional settings:
+
+| Key                                      | Default           | Description                                    |
+| ---------------------------------------- | ----------------- | ---------------------------------------------- |
+| `syncreeper:ssh-login-ntfy-topic`        | Unset (disabled)  | Your topic; store as a secret                  |
+| `syncreeper:ssh-login-ntfy-server`       | `https://ntfy.sh` | HTTPS ntfy server URL                          |
+| `syncreeper:ssh-login-ntfy-token`        | Unset             | Optional access token; store as a secret       |
+| `syncreeper:ssh-login-ntfy-ignore-users` | `[]`              | Usernames to exclude from alerts (exact match) |
+
+To suppress recurring passthrough tunnel login alerts:
+
+```bash
+pulumi config set syncreeper:ssh-login-ntfy-ignore-users '["passthrough"]'
+pnpm run pulumi
+```
+
+Other users still trigger notifications. Set the list to `[]` to restore alerts
+for all users, or add more usernames to exclude other automated accounts.
+
+On a public ntfy server, unreserved topics are accessible to anyone who knows the
+name. Storing a topic as a Pulumi secret keeps it out of public source/config
+output, but does not add ntfy access control. You can use a reserved topic and
+access token, or an authenticated self-hosted server, for access-controlled alerts.
+
+Each message includes the hostname, username, source IP/port, authentication
+method, and UTC timestamp. Alerts include SCP/SFTP, tunnel-only connections, and
+passthrough reconnects unless that user is ignored; failed attempts and session
+closes do not trigger notifications.
+Monitoring starts at deployment and saves a journal cursor across service restarts.
+Delivery failures retry every 60 seconds and queue later alerts behind them without
+blocking SSH. Recovery across restarts depends on the events still being in the
+system journal; a crash after sending but before saving the cursor can produce a
+duplicate notification.
+
+Check delivery with `sudo journalctl -u syncreeper-ssh-login-notification -f`, then
+open a new SSH connection. Topics and tokens are deployed in a root-only
+configuration file and are not included in service error messages. To disable
+alerts, remove `syncreeper:ssh-login-ntfy-topic` with `pulumi config rm` and redeploy.
 
 ### Modifying Configuration
 

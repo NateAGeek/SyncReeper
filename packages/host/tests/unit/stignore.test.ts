@@ -40,6 +40,14 @@ describe("Stignore Content Generation", () => {
         expect(trailingSlashPatterns).toEqual([]);
     });
 
+    it("should not contain inline comments on active patterns", () => {
+        const activeLines = content
+            .split("\n")
+            .filter((line) => !line.startsWith("//") && line.trim() !== "");
+
+        expect(activeLines.filter((line) => line.includes("//"))).toEqual([]);
+    });
+
     // OS-specific file patterns
     describe("OS-Specific Files (with (?d) prefix)", () => {
         it("should ignore macOS files with (?d) prefix", () => {

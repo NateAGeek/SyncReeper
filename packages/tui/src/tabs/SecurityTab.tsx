@@ -18,6 +18,7 @@ export function SecurityTab({
 }: TabActionProps): React.ReactElement {
     const [firewallLines, setFirewallLines] = useState<string[]>([]);
     const [blockedIps, setBlockedIps] = useState<string[]>([]);
+    const [sshConnections, setSshConnections] = useState<string[]>([]);
     const [autoUpdateInfo, setAutoUpdateInfo] = useState<string>("checking...");
     const [isLoading, setIsLoading] = useState(true);
 
@@ -53,6 +54,58 @@ export function SecurityTab({
             setIsLoading(true);
 
             if (isLinux()) {
+                // `ss` exposes the peer endpoint and, when permitted, the sshd
+                // process/PID. `who` adds the user and login-session metadata.
+                try {
+                    const [connections, sessions] = await Promise.all([
+                        execa(
+                            "ss",
+                            [
+                                "-Htnp",
+                                "state",
+                                "established",
+                                "(",
+                                "sport",
+                                "=",
+                                ":ssh",
+                                "or",
+                                "sport",
+                                "=",
+                                ":22",
+                                ")",
+                            ],
+                            { reject: false }
+                        ),
+                        execa("who", [], { reject: false }),
+                    ]);
+
+                    if (!cancelled) {
+                        const connectionLines = connections.stdout
+                            .split("\n")
+                            .map((line) => line.trim())
+                            .filter(Boolean)
+                            .map((line) => `  ${line}`);
+                        const sessionLines = sessions.stdout
+                            .split("\n")
+                            .map((line) => line.trim())
+                            .filter((line) => line && !line.startsWith("wtmp"))
+                            .map((line) => `  ${line}`);
+
+                        setSshConnections([
+                            "  Network sessions (ss):",
+                            ...(connectionLines.length > 0
+                                ? connectionLines
+                                : ["  No established SSH connections"]),
+                            "  Login sessions (who):",
+                            ...(sessionLines.length > 0
+                                ? sessionLines
+                                : ["  No logged-in sessions"]),
+                        ]);
+                    }
+                } catch {
+                    if (!cancelled) setSshConnections(["  Unable to query SSH connections"]);
+                }
+
                 // Firewall status
                 try {
                     const ufwCmd = asSystemService("ufw", ["status", "verbose"]);
@@ -132,6 +185,24 @@ export function SecurityTab({
                     if (!cancelled) setAutoUpdateInfo("unable to check");
                 }
             } else if (isMacOS()) {
+                try {
+                    const result = await execa("who", [], { reject: false });
+                    if (!cancelled) {
+                        const sessions = result.stdout
+                            .split("\n")
+                            .map((line) => line.trim())
+                            .filter((line) => line && !line.startsWith("wtmp"))
+                            .map((line) => `  ${line}`);
+                        setSshConnections([
+                            "  Login sessions (who):",
+                            ...(sessions.length > 0 ? sessions : ["  No logged-in sessions"]),
+                            "  Network peer details are unavailable on macOS",
+                        ]);
+                    }
+                } catch {
+                    if (!cancelled) setSshConnections(["  Unable to query SSH sessions"]);
+                }
+
                 // macOS: pf firewall
                 try {
                     const result = await execa("pfctl", ["-s", "rules"], { reject: false });
@@ -172,6 +243,9 @@ export function SecurityTab({
                 return 0;
             }
         })()}`,
+        "",
+        "-- Active SSH Connections --",
+        ...sshConnections,
         "",
         "-- SSHGuard Blocked IPs --",
         ...blockedIps,

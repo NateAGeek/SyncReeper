@@ -67,6 +67,41 @@ beforeAll(() => {
 });
 
 describe("Pulumi Mock Tests - SSH Setup", () => {
+    it("deploys secret root-only ntfy settings and restarts the watcher on changes", async () => {
+        createdResources = [];
+        const { setupSSHLoginNotification } =
+            await import("../../src/services/ssh/login-notification");
+        setupSSHLoginNotification(
+            pulumi.secret({
+                topic: "test-private-topic",
+                server: "https://ntfy.example.com",
+                token: "test-token",
+            }),
+            []
+        );
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const settings = createdResources.find((r) => r.name === "ssh-login-notification-settings");
+        // Pulumi serializes secret inputs as a tagged object in resource mocks.
+        expect(settings?.inputs.create).toMatchObject({
+            "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+            value: expect.stringContaining("chmod 600 /etc/syncreeper-ssh-login-notification.json"),
+        });
+        const service = createdResources.find((r) => r.name === "ssh-login-notification-service");
+        expect(service?.inputs.create).toContain(
+            "systemctl restart syncreeper-ssh-login-notification"
+        );
+        expect(service?.inputs.update).toBe(service?.inputs.create);
+        expect(service?.inputs.delete).toBe(
+            "systemctl disable --now syncreeper-ssh-login-notification"
+        );
+        expect(service?.inputs.environment).toMatchObject({
+            "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+            value: {
+                SYNCREEPER_NOTIFICATION_SETTINGS_HASH: expect.stringMatching(/^[a-f0-9]{64}$/),
+            },
+        });
+    });
+
     it("should create expected resources for SSH hardening", async () => {
         createdResources = [];
 

@@ -35,6 +35,8 @@ export function generateStignoreContent(): string {
 // - Use ! to negate (include) a pattern
 // - Use ** for recursive matching
 // - Patterns without a leading / match at any depth
+// - The first matching pattern wins
+// - Comments must start at the beginning of a line; inline comments are invalid
 // - (?d) prefix allows deletion of ignored files blocking directory removal
 
 // ============================================================
@@ -88,12 +90,15 @@ export function generateStignoreContent(): string {
 // JavaScript / TypeScript
 // ============================================================
 **/node_modules
-**/dist                    // Also: Python sdist/bdist output
-**/build                   // Also: Gradle, CMake, Python setuptools
+// Also covers Python sdist/bdist output
+**/dist
+// Also covers Gradle, CMake, and Python setuptools output
+**/build
 **/.next
 **/.nuxt
 **/.output
-**/.cache                  // Also: Parcel, Snowpack
+// Also covers Parcel and Snowpack caches
+**/.cache
 **/.parcel-cache
 **/.turbo
 **/.npm
@@ -129,7 +134,8 @@ export function generateStignoreContent(): string {
 // ============================================================
 // Rust
 // ============================================================
-**/target                  // Also: Maven, sbt, Clojure Leiningen
+// Also covers Maven, sbt, and Clojure Leiningen output
+**/target
 **/*.rs.bk
 **/*.rlib
 **/*.rmeta
@@ -138,7 +144,8 @@ export function generateStignoreContent(): string {
 // ============================================================
 // Go
 // ============================================================
-**/vendor                  // Also: PHP Composer, Ruby Bundler
+// Also covers PHP Composer and Ruby Bundler dependencies
+**/vendor
 **/go.work
 
 // ============================================================
@@ -150,7 +157,8 @@ export function generateStignoreContent(): string {
 **/*.ear
 **/*.nar
 **/.gradle
-**/out                     // Also: TypeScript outDir, VS Code extensions
+// Also covers TypeScript outDir and VS Code extension output
+**/out
 **/.idea/artifacts
 **/.idea/libraries
 **/pom.xml.tag
