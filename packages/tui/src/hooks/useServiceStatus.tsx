@@ -31,9 +31,25 @@ function isPermissionError(exitCode: number | undefined, output: string): boolea
 export interface ServiceStatusResult {
     status: ServiceStatusValue;
     output: string;
+    diagnostic: string;
+    exitCode: number | undefined;
     lastChecked: Date | null;
     isLoading: boolean;
     refresh: () => void;
+}
+
+function summarizeDiagnostic(output: string, exitCode: number | undefined): string {
+    const lines = output
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+    const important = lines.find((line) =>
+        /active:\s+failed|result:\s+exit-code|status=\d+\/failure|bad credentials|permission denied|unit .* not found/i.test(
+            line
+        )
+    );
+    const summary = important ?? lines[0] ?? "No diagnostic output";
+    return exitCode === undefined ? summary : `exit ${exitCode}: ${summary}`;
 }
 
 /**
@@ -47,6 +63,8 @@ export function useServiceStatus(
 ): ServiceStatusResult {
     const [status, setStatus] = useState<ServiceStatusValue>("unknown");
     const [output, setOutput] = useState("");
+    const [diagnostic, setDiagnostic] = useState("");
+    const [exitCode, setExitCode] = useState<number | undefined>();
     const [lastChecked, setLastChecked] = useState<Date | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [manualTrigger, setManualTrigger] = useState(0);
@@ -70,7 +88,14 @@ export function useServiceStatus(
                 const fullOutput = stdout + (stderr ? `\n${stderr}` : "");
 
                 setOutput(fullOutput);
+                setExitCode(result.exitCode);
                 setLastChecked(new Date());
+
+                const lower = fullOutput.toLowerCase();
+                const failed =
+                    lower.includes("active: failed") ||
+                    lower.includes("result: exit-code") ||
+                    /status=\d+\/failure/.test(lower);
 
                 if (command === "launchctl" && args[0] === "list" && args.length === 2) {
                     if (result.exitCode === 0) {
@@ -83,16 +108,26 @@ export function useServiceStatus(
                                   ? "error"
                                   : "stopped"
                         );
+                        setDiagnostic(
+                            !processId && exitStatus && Number(exitStatus) !== 0
+                                ? summarizeDiagnostic(fullOutput, result.exitCode)
+                                : ""
+                        );
                     } else if (isPermissionError(result.exitCode, fullOutput)) {
                         setStatus("no_permission");
+                        setDiagnostic(summarizeDiagnostic(fullOutput, result.exitCode));
                     } else if (fullOutput.toLowerCase().includes("could not find service")) {
                         setStatus("stopped");
+                        setDiagnostic(summarizeDiagnostic(fullOutput, result.exitCode));
                     } else {
                         setStatus("error");
+                        setDiagnostic(summarizeDiagnostic(fullOutput, result.exitCode));
                     }
+                } else if (failed) {
+                    setStatus("error");
+                    setDiagnostic(summarizeDiagnostic(fullOutput, result.exitCode));
                 } else if (result.exitCode === 0) {
                     // Parse the output to determine status
-                    const lower = fullOutput.toLowerCase();
                     if (
                         lower.includes("active (running)") ||
                         lower.includes("is running") ||
@@ -115,9 +150,11 @@ export function useServiceStatus(
                     } else {
                         setStatus("running");
                     }
+                    setDiagnostic("");
                 } else if (isPermissionError(result.exitCode, fullOutput)) {
                     // sudo -n failed (no tty / no NOPASSWD rule) or D-Bus access denied
                     setStatus("no_permission");
+                    setDiagnostic(summarizeDiagnostic(fullOutput, result.exitCode));
                 } else if (result.exitCode === 3) {
                     // systemctl returns 3 for "inactive" services.
                     // For timer-triggered oneshot services, inactive + successful
@@ -130,19 +167,27 @@ export function useServiceStatus(
                         lower.includes("result=success")
                     ) {
                         setStatus("active");
+                        setDiagnostic("");
                     } else {
                         setStatus("stopped");
+                        setDiagnostic(summarizeDiagnostic(fullOutput, result.exitCode));
                     }
                 } else if (result.exitCode === 4) {
                     // systemctl returns 4 for "unit not found"
                     setStatus("unknown");
+                    setDiagnostic(summarizeDiagnostic(fullOutput, result.exitCode));
                 } else {
                     setStatus("error");
+                    setDiagnostic(summarizeDiagnostic(fullOutput, result.exitCode));
                 }
-            } catch {
+            } catch (reason) {
                 if (!cancelled) {
                     setStatus("unknown");
-                    setOutput("Failed to check service status");
+                    const detail = reason instanceof Error ? reason.message : "unexpected error";
+                    const message = `Failed to check service status: ${detail}`;
+                    setOutput(message);
+                    setDiagnostic(message);
+                    setExitCode(undefined);
                     setLastChecked(new Date());
                 }
             } finally {
@@ -161,5 +206,5 @@ export function useServiceStatus(
         };
     }, [command, args.join(","), refreshTrigger, manualTrigger, interval]);
 
-    return { status, output, lastChecked, isLoading, refresh };
+    return { status, output, diagnostic, exitCode, lastChecked, isLoading, refresh };
 }

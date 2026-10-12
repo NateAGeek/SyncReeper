@@ -43,7 +43,7 @@ export function isWindows(): boolean {
 /**
  * Returns a human-readable display name for the platform
  */
-export function getPlatformDisplayName(platform?: Platform): string {
+export function getPlatformDisplayName(platform?: NodeJS.Platform): string {
     const p = platform ?? detectPlatform();
     switch (p) {
         case "linux":

@@ -1,6 +1,6 @@
 packages:
-  - packages/*
+    - packages/*
 ignoredBuiltDependencies:
-  - '@pulumi/command'
-  - esbuild
-  - protobufjs
+    - "@pulumi/command"
+    - esbuild
+    - protobufjs

@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import { StatusBadge } from "../components/StatusBadge.js";
 import { useServiceStatus } from "../hooks/useServiceStatus.js";
 import { useServiceAction } from "../hooks/useServiceAction.js";
-import { isLinux, isMacOS } from "@syncreeper/shared";
+import { isLinux, isMacOS, DEFAULT_SERVICE_USER_LINUX } from "@syncreeper/shared";
 import { asServiceUser, asSystemService } from "../utils/userCommand.utils.js";
 import type { TabActionProps } from "../types.js";
 import { useEffect, useRef } from "react";
@@ -22,10 +22,23 @@ interface ServiceRow {
     launchctlLabel?: string;
 }
 
-function getServiceChecks(): ServiceRow[] {
+function getServiceChecks(serviceUser = DEFAULT_SERVICE_USER_LINUX): ServiceRow[] {
     if (isLinux()) {
-        const syncTimer = asServiceUser("systemctl", ["--user", "status", "syncreeper-sync.timer"]);
-        const syncthing = asServiceUser("systemctl", ["--user", "status", "syncthing"]);
+        const syncTimer = asServiceUser(
+            "systemctl",
+            ["--user", "status", "syncreeper-sync.timer"],
+            serviceUser
+        );
+        const syncService = asServiceUser(
+            "systemctl",
+            ["--user", "status", "syncreeper-sync.service"],
+            serviceUser
+        );
+        // Syncthing runs as a system-level templated unit (syncthing@<user>.service)
+        const syncthing = asSystemService("systemctl", [
+            "status",
+            `syncthing@${serviceUser}.service`,
+        ]);
         const sshguard = asSystemService("systemctl", ["status", "sshguard"]);
         const ufw = asSystemService("ufw", ["status"]);
         const autoUpdates = asSystemService("systemctl", ["status", "unattended-upgrades"]);
@@ -39,11 +52,18 @@ function getServiceChecks(): ServiceRow[] {
                 userLevel: true,
             },
             {
+                name: "GitHub Sync Last Run",
+                command: syncService.command,
+                args: syncService.args,
+                unit: "syncreeper-sync.service",
+                userLevel: true,
+            },
+            {
                 name: "Syncthing",
                 command: syncthing.command,
                 args: syncthing.args,
-                unit: "syncthing",
-                userLevel: true,
+                unit: `syncthing@${serviceUser}.service`,
+                userLevel: false,
             },
             {
                 name: "SSHGuard",
@@ -107,7 +127,7 @@ function ServiceRowComponent({
     args,
     refreshTrigger,
 }: ServiceRow & { refreshTrigger: number }): React.ReactElement {
-    const { status, isLoading } = useServiceStatus(command, args, refreshTrigger);
+    const { status, isLoading, diagnostic } = useServiceStatus(command, args, refreshTrigger);
 
     return (
         <Box gap={1}>
@@ -121,6 +141,11 @@ function ServiceRowComponent({
                     <StatusBadge status={status} />
                 )}
             </Box>
+            {diagnostic && status !== "running" && status !== "active" && (
+                <Text color={status === "error" ? "red" : "yellow"} wrap="truncate">
+                    {diagnostic}
+                </Text>
+            )}
         </Box>
     );
 }
@@ -129,8 +154,9 @@ export function OverviewTab({
     refreshTrigger,
     serviceActionTrigger,
     onActionUpdate,
+    config,
 }: TabActionProps): React.ReactElement {
-    const services = getServiceChecks();
+    const services = getServiceChecks(config?.serviceUser);
 
     // Overview tab: action targets the first service (GitHub Sync Timer)
     const primaryService = services[0];
@@ -138,6 +164,7 @@ export function OverviewTab({
         unit: primaryService?.unit ?? "",
         userLevel: primaryService?.userLevel ?? true,
         launchctlLabel: primaryService?.launchctlLabel,
+        serviceUser: config?.serviceUser,
         onSuccess: () => {
             // No auto-refresh needed; the polling will pick it up
         },

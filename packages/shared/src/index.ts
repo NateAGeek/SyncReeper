@@ -5,4 +5,5 @@
  */
 
 export * from "./platform";
+export * from "./stignore";
 export * from "./types";

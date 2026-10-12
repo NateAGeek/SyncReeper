@@ -30,6 +30,7 @@ const APT_PACKAGES = [
     "git", // Version control
     "curl", // HTTP client (needed for NVM)
     "ca-certificates", // SSL certificates
+    "python3", // SSH login notification watcher (standard-library HTTPS client)
 ];
 
 /**

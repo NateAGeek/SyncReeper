@@ -30,7 +30,11 @@ export function generateSyncthingCliConfigScript(
             return `
 # Add trusted device: ${deviceName}
 echo "Adding device: ${deviceName} (${deviceId})..."
-syncthing cli --home="${syncthingConfig}" config devices add --device-id "${deviceId}" --name "${deviceName}" 2>/dev/null || echo "Device may already exist, continuing..."`;
+if syncthing cli --home="${syncthingConfig}" config devices list | grep -Fxq "${deviceId}"; then
+    echo "Device already exists, continuing..."
+else
+    syncthing cli --home="${syncthingConfig}" config devices add --device-id "${deviceId}" --name "${deviceName}"
+fi`;
         })
         .join("\n");
 
@@ -41,7 +45,11 @@ syncthing cli --home="${syncthingConfig}" config devices add --device-id "${devi
             return `
 # Share folder with ${deviceName}
 echo "Sharing folder '${folderId}' with ${deviceName}..."
-syncthing cli --home="${syncthingConfig}" config folders "${folderId}" devices add --device-id "${deviceId}" 2>/dev/null || echo "Device may already be shared, continuing..."`;
+if syncthing cli --home="${syncthingConfig}" config folders "${folderId}" devices list | grep -Fxq "${deviceId}"; then
+    echo "Device is already shared, continuing..."
+else
+    syncthing cli --home="${syncthingConfig}" config folders "${folderId}" devices add --device-id "${deviceId}"
+fi`;
         })
         .join("\n");
 
@@ -60,7 +68,13 @@ syncthing cli --home="${syncthingConfig}" config folders remove "default" 2>/dev
 # Create the repos folder
 echo ""
 echo "Creating folder: ${folderId}"
-syncthing cli --home="${syncthingConfig}" config folders add --id "${folderId}" --path "${reposPath}" --label "${folderLabel}" 2>/dev/null || echo "Folder may already exist, continuing..."
+if syncthing cli --home="${syncthingConfig}" config folders list | grep -Fxq "${folderId}"; then
+    echo "Folder already exists, updating its path and label..."
+    syncthing cli --home="${syncthingConfig}" config folders "${folderId}" path set "${reposPath}"
+    syncthing cli --home="${syncthingConfig}" config folders "${folderId}" label set "${folderLabel}"
+else
+    syncthing cli --home="${syncthingConfig}" config folders add --id "${folderId}" --path "${reposPath}" --label "${folderLabel}"
+fi
 
 # Add trusted devices
 echo ""

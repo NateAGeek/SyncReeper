@@ -66,7 +66,7 @@ REPOS_PATH=${config.sync.reposPath}
  * Generates the user-level systemd service unit file
  * Note: No User/Group for user services - they run as the owning user
  */
-export function generateServiceUnit(reposPath: string): string {
+export function generateServiceUnit(_reposPath: string): string {
     const { syncApp, envDir } = getPaths();
 
     return `[Unit]

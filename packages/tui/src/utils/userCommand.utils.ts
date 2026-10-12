@@ -28,27 +28,28 @@ export interface ResolvedCommand {
     args: string[];
 }
 
-/** Cached service user info so we only look it up once. */
-let cachedServiceUser: { name: string; uid: string } | null = null;
+/** Cached service user info so we only look each user up once. */
+const cachedServiceUsers = new Map<string, { name: string; uid: string }>();
 
 /**
  * Reset the cached service user info. Exported for testing only.
  * @internal
  */
 export function _resetServiceUserCache(): void {
-    cachedServiceUser = null;
+    cachedServiceUsers.clear();
 }
 
-function resolveServiceUser(): { name: string; uid: string } | null {
-    if (cachedServiceUser !== null) return cachedServiceUser;
+function resolveServiceUser(name: string): { name: string; uid: string } | null {
+    const cached = cachedServiceUsers.get(name);
+    if (cached) return cached;
 
-    const name = DEFAULT_SERVICE_USER_LINUX;
     try {
         const result = execaSync("id", ["-u", name]);
         const uid = result.stdout.trim();
         if (uid) {
-            cachedServiceUser = { name, uid };
-            return cachedServiceUser;
+            const user = { name, uid };
+            cachedServiceUsers.set(name, user);
+            return user;
         }
     } catch {
         // Service user doesn't exist
@@ -86,7 +87,11 @@ function needsDbusEnv(): boolean {
  *
  * NOTE: Do NOT use this for `journalctl --user` — use `asJournalctl()` instead.
  */
-export function asServiceUser(command: string, args: string[]): ResolvedCommand {
+export function asServiceUser(
+    command: string,
+    args: string[],
+    serviceUser = DEFAULT_SERVICE_USER_LINUX
+): ResolvedCommand {
     if (!isRoot()) {
         // Not root — running as the service user (or another non-root user).
         // System users may lack XDG_RUNTIME_DIR/DBUS_SESSION_BUS_ADDRESS,
@@ -106,7 +111,7 @@ export function asServiceUser(command: string, args: string[]): ResolvedCommand 
         return { command, args };
     }
 
-    const user = resolveServiceUser();
+    const user = resolveServiceUser(serviceUser);
     if (!user) {
         // Service user not found; return as-is and let it fail gracefully
         return { command, args };

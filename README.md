@@ -49,6 +49,7 @@ GitHub ──(API)──> VPS / Mac ──(Syncthing)──> Laptop, Desktop, NA
 
 - **Firewall**: UFW (Linux) / pf (macOS) -- default deny inbound, allow outbound, SSH rate-limiting
 - **SSH Hardening**: Key-only authentication, password auth disabled, root login disabled, restricted to service user
+- **SSH Login Notifications**: Optional ntfy push alerts for every successful SSH authentication (Linux)
 - **Brute-Force Protection**: SSHGuard with 2-hour block time, 1.5x multiplier, progressive bans
 - **Auto-Updates**: Unattended security upgrades with auto-reboot at 3 AM (Linux)
 - **Systemd Sandboxing**: `ProtectSystem=strict`, private `/tmp`, limited write paths
@@ -68,10 +69,11 @@ GitHub ──(API)──> VPS / Mac ──(Syncthing)──> Laptop, Desktop, NA
 
 ### Terminal Dashboard (TUI)
 
-- 5 tabbed views: Overview, GitHub Sync, Syncthing, Passthrough, Security
+- 6 tabbed views: Overview, GitHub Sync, Syncthing, Passthrough, Security, Config
 - Real-time service status polling (systemctl / launchctl)
-- Log streaming from journalctl / log files
+- Error-aware logs from journalctl / log files, including stderr and exit status
 - Service actions: Start, Stop, Restart from within tabs
+- Pulumi configuration viewer and editor with masked GitHub token rotation
 - Keyboard navigation: Tab/Shift-Tab, j/k scroll, G/g jump, q quit, r refresh
 - Colored status badges: RUNNING, STOPPED, ERROR, ACTIVE, ENABLED, DISABLED
 - Root-user detection with automatic `sudo -u` command wrapping
@@ -142,7 +144,70 @@ All configuration is stored in Pulumi config. View current settings with `pulumi
 | `syncreeper:passthrough-port`            | `2222`       | Tunnel port on VPS                |
 | `syncreeper:passthrough-authorized-keys` | --           | SSH keys for tunnel user          |
 
+### SSH Login Push Notifications (Linux)
+
+Notifications are disabled by default; no topic or credentials are included in
+the repository. Install the ntfy phone app and subscribe to your own topic on
+`https://ntfy.sh` (or your self-hosted ntfy server), then configure that same topic
+as a Pulumi secret and deploy. This uses HTTPS and requires no SMTP server:
+
+```bash
+pulumi config set --secret syncreeper:ssh-login-ntfy-topic
+pnpm run pulumi
+```
+
+The command prompts for your topic instead of recording it in shell history.
+Topics support 1–64 letters, numbers, underscores, or hyphens. Optional settings:
+
+| Key                                      | Default           | Description                                    |
+| ---------------------------------------- | ----------------- | ---------------------------------------------- |
+| `syncreeper:ssh-login-ntfy-topic`        | Unset (disabled)  | Your topic; store as a secret                  |
+| `syncreeper:ssh-login-ntfy-server`       | `https://ntfy.sh` | HTTPS ntfy server URL                          |
+| `syncreeper:ssh-login-ntfy-token`        | Unset             | Optional access token; store as a secret       |
+| `syncreeper:ssh-login-ntfy-ignore-users` | `[]`              | Usernames to exclude from alerts (exact match) |
+
+To suppress recurring passthrough tunnel login alerts:
+
+```bash
+pulumi config set syncreeper:ssh-login-ntfy-ignore-users '["passthrough"]'
+pnpm run pulumi
+```
+
+Other users still trigger notifications. Set the list to `[]` to restore alerts
+for all users, or add more usernames to exclude other automated accounts.
+
+On a public ntfy server, unreserved topics are accessible to anyone who knows the
+name. Storing a topic as a Pulumi secret keeps it out of public source/config
+output, but does not add ntfy access control. You can use a reserved topic and
+access token, or an authenticated self-hosted server, for access-controlled alerts.
+
+Each message includes the hostname, username, source IP/port, authentication
+method, and UTC timestamp. Alerts include SCP/SFTP, tunnel-only connections, and
+passthrough reconnects unless that user is ignored; failed attempts and session
+closes do not trigger notifications.
+Monitoring starts at deployment and saves a journal cursor across service restarts.
+Delivery failures retry every 60 seconds and queue later alerts behind them without
+blocking SSH. Recovery across restarts depends on the events still being in the
+system journal; a crash after sending but before saving the cursor can produce a
+duplicate notification.
+
+Check delivery with `sudo journalctl -u syncreeper-ssh-login-notification -f`, then
+open a new SSH connection. Topics and tokens are deployed in a root-only
+configuration file and are not included in service error messages. To disable
+alerts, remove `syncreeper:ssh-login-ntfy-topic` with `pulumi config rm` and redeploy.
+
 ### Modifying Configuration
+
+The Config tab groups editable values by service. Select a value with `j`/`k` and press `e`
+or Enter. GitHub token rotation is entered twice, never displayed, applied through Pulumi, and
+starts an immediate sync. Run the Linux dashboard as root with the deployment's Pulumi secrets
+provider environment available. Other edits update Pulumi's source of truth and require
+`pulumi up` before infrastructure changes take effect.
+
+The setup wizard also checks each existing value before writing it. Existing public values and
+encrypted values are never replaced unless you confirm that individual replacement. If Pulumi
+requires its secrets passphrase during a dashboard update, the dashboard requests it through a
+masked prompt and uses it only for that operation.
 
 ```bash
 # Update a value
@@ -265,13 +330,13 @@ syncreeper-passthrough <command>
 
 #### File locations (macOS)
 
-| Path                                                            | Purpose                              |
-| --------------------------------------------------------------- | ------------------------------------ |
-| `/Library/LaunchDaemons/com.syncreeper.passthrough.plist`       | LaunchDaemon (current, system-level) |
-| `~/Library/LaunchAgents/com.syncreeper.passthrough.plist`       | Legacy LaunchAgent (auto-migrated)   |
-| `~/.config/syncreeper/passthrough.json`                         | VPS host/port/tunnel-port config     |
-| `~/.ssh/syncreeper-passthrough` (+ `.pub`)                      | Tunnel SSH key                       |
-| `/var/log/syncreeper/passthrough.{out,err}.log`                 | Daemon stdout / stderr               |
+| Path                                                      | Purpose                              |
+| --------------------------------------------------------- | ------------------------------------ |
+| `/Library/LaunchDaemons/com.syncreeper.passthrough.plist` | LaunchDaemon (current, system-level) |
+| `~/Library/LaunchAgents/com.syncreeper.passthrough.plist` | Legacy LaunchAgent (auto-migrated)   |
+| `~/.config/syncreeper/passthrough.json`                   | VPS host/port/tunnel-port config     |
+| `~/.ssh/syncreeper-passthrough` (+ `.pub`)                | Tunnel SSH key                       |
+| `/var/log/syncreeper/passthrough.{out,err}.log`           | Daemon stdout / stderr               |
 
 #### LaunchDaemon vs. legacy LaunchAgent
 
@@ -333,24 +398,24 @@ pnpm run build && pnpm run start:local
 
 ### Build Scripts
 
-| Script                         | Description                                              |
-| ------------------------------ | -------------------------------------------------------- |
-| `pnpm run build`               | Build all packages                                       |
-| `pnpm run build:host`          | Build shared + host packages                             |
-| `pnpm run build:sync`          | Build sync application bundle                            |
-| `pnpm run pulumi`              | Build host + run `pulumi up`                             |
-| `pnpm run pulumi:preview`      | Build host + run `pulumi preview`                        |
-| `pnpm run passthrough`         | Show node-passthrough CLI help                           |
-| `pnpm run passthrough:setup`   | Interactive setup: install autossh, key, LaunchDaemon    |
-| `pnpm run passthrough:start`   | Start the reverse SSH tunnel daemon                      |
-| `pnpm run passthrough:stop`    | Stop the reverse SSH tunnel daemon                       |
-| `pnpm run passthrough:status`  | Show plist install state and tunnel status               |
-| `pnpm run passthrough:uninstall` | Remove the daemon, plist, and (optionally) key/config  |
-| `pnpm run lint`                | Run ESLint                                               |
-| `pnpm run lint:fix`            | Auto-fix lint issues                                     |
-| `pnpm run format`              | Format with Prettier                                     |
-| `pnpm run check`               | Full CI check (lint, format, build)                      |
-| `pnpm run clean`               | Remove all dist/ directories                             |
+| Script                           | Description                                           |
+| -------------------------------- | ----------------------------------------------------- |
+| `pnpm run build`                 | Build all packages                                    |
+| `pnpm run build:host`            | Build shared + host packages                          |
+| `pnpm run build:sync`            | Build sync application bundle                         |
+| `pnpm run pulumi`                | Build host + run `pulumi up`                          |
+| `pnpm run pulumi:preview`        | Build host + run `pulumi preview`                     |
+| `pnpm run passthrough`           | Show node-passthrough CLI help                        |
+| `pnpm run passthrough:setup`     | Interactive setup: install autossh, key, LaunchDaemon |
+| `pnpm run passthrough:start`     | Start the reverse SSH tunnel daemon                   |
+| `pnpm run passthrough:stop`      | Stop the reverse SSH tunnel daemon                    |
+| `pnpm run passthrough:status`    | Show plist install state and tunnel status            |
+| `pnpm run passthrough:uninstall` | Remove the daemon, plist, and (optionally) key/config |
+| `pnpm run lint`                  | Run ESLint                                            |
+| `pnpm run lint:fix`              | Auto-fix lint issues                                  |
+| `pnpm run format`                | Format with Prettier                                  |
+| `pnpm run check`                 | Full CI check (lint, format, build)                   |
+| `pnpm run clean`                 | Remove all dist/ directories                          |
 
 ### Running Tests
 
