@@ -393,6 +393,18 @@ sudo systemctl start syncreeper-sync.service
 
 ### Syncthing not connecting
 
+On macOS, check and start the Homebrew service:
+
+```bash
+brew services info syncthing
+brew services start syncthing
+syncthing cli show system
+```
+
+In the dashboard's Syncthing tab, `s` starts the service, `x` stops it, and `R` restarts it. A stopped service reports `[STOPPED]`; connection failures show the CLI error, such as `connection refused` when the local API is offline.
+
+On Linux:
+
 ```bash
 # Check Syncthing status
 systemctl status syncthing@syncreeper

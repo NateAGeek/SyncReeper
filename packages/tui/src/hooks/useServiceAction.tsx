@@ -30,7 +30,8 @@ export interface ServiceActionOptions {
  * - Linux user services:   systemctl --user <action> <unit>
  *   (when root, wraps via asServiceUser to target the syncreeper user's session)
  * - Linux system services: sudo systemctl <action> <unit>
- * - macOS services:        launchctl kickstart/kill -k <domain>/<label>
+ * - macOS Homebrew services: brew services <action> <formula>
+ * - Other macOS services: launchctl kickstart/kill -k <domain>/<label>
  */
 export function useServiceAction(options: ServiceActionOptions): ServiceActionResult {
     const { unit, userLevel, launchctlLabel, onSuccess } = options;
@@ -97,7 +98,13 @@ export function useServiceAction(options: ServiceActionOptions): ServiceActionRe
                         const target = `${domain}/${label}`;
 
                         let result;
-                        if (action === "stop") {
+                        if (label.startsWith("homebrew.mxcl.")) {
+                            result = await execa(
+                                "brew",
+                                ["services", action, label.slice("homebrew.mxcl.".length)],
+                                { reject: false, timeout: 30000 }
+                            );
+                        } else if (action === "stop") {
                             result = await execa("launchctl", ["kill", "SIGTERM", target], {
                                 reject: false,
                                 timeout: 15000,

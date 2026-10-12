@@ -54,6 +54,39 @@ describe("useServiceStatus", () => {
         vi.restoreAllMocks();
     });
 
+    it.each([
+        {
+            exitCode: 0,
+            stdout: '"PID" = 123; "LastExitStatus" = 0;',
+            stderr: "",
+            status: "running",
+        },
+        { exitCode: 0, stdout: '"LastExitStatus" = 0;', stderr: "", status: "stopped" },
+        { exitCode: 0, stdout: '"LastExitStatus" = 1;', stderr: "", status: "error" },
+        {
+            exitCode: 113,
+            stdout: "",
+            stderr: 'Could not find service "homebrew.mxcl.syncthing" in domain for port',
+            status: "stopped",
+        },
+    ])("should report launchctl status as $status for $stdout $stderr", async (serviceResult) => {
+        mockExeca.mockResolvedValue(serviceResult);
+        const instance = render(
+            <StatusHarness
+                command="launchctl"
+                args={["list", "homebrew.mxcl.syncthing"]}
+                refreshTrigger={0}
+            />
+        );
+        try {
+            await vi.waitFor(() => {
+                expect(instance.lastFrame()).toContain(`status:${serviceResult.status}`);
+            });
+        } finally {
+            instance.unmount();
+        }
+    });
+
     it("should parse 'active (running)' as running status", async () => {
         mockExeca.mockResolvedValue({
             exitCode: 0,

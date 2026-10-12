@@ -72,7 +72,25 @@ export function useServiceStatus(
                 setOutput(fullOutput);
                 setLastChecked(new Date());
 
-                if (result.exitCode === 0) {
+                if (command === "launchctl" && args[0] === "list" && args.length === 2) {
+                    if (result.exitCode === 0) {
+                        const processId = stdout.match(/"PID"\s*=\s*(\d+)/)?.[1];
+                        const exitStatus = stdout.match(/"LastExitStatus"\s*=\s*(-?\d+)/)?.[1];
+                        setStatus(
+                            processId && Number(processId) > 0
+                                ? "running"
+                                : exitStatus && Number(exitStatus) !== 0
+                                  ? "error"
+                                  : "stopped"
+                        );
+                    } else if (isPermissionError(result.exitCode, fullOutput)) {
+                        setStatus("no_permission");
+                    } else if (fullOutput.toLowerCase().includes("could not find service")) {
+                        setStatus("stopped");
+                    } else {
+                        setStatus("error");
+                    }
+                } else if (result.exitCode === 0) {
                     // Parse the output to determine status
                     const lower = fullOutput.toLowerCase();
                     if (

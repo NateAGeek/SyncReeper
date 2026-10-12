@@ -47,12 +47,16 @@ export function SyncthingTab({
     const [deviceId, setDeviceId] = useState<string>("loading...");
     const [connectionLines, setConnectionLines] = useState<string[]>([]);
     const [isLoadingDetails, setIsLoadingDetails] = useState(true);
+    const [detailsRefreshTrigger, setDetailsRefreshTrigger] = useState(0);
 
     // Service actions
     const primary = getPrimaryUnit();
     const serviceAction = useServiceAction({
         ...primary,
-        onSuccess: serviceStatus.refresh,
+        onSuccess: () => {
+            serviceStatus.refresh();
+            setDetailsRefreshTrigger((previousTrigger) => previousTrigger + 1);
+        },
     });
 
     const lastSeq = useRef(0);
@@ -78,6 +82,7 @@ export function SyncthingTab({
             try {
                 const result = await execa(showSystemCmd.command, showSystemCmd.args, {
                     reject: false,
+                    timeout: 10000,
                 });
                 if (!cancelled && result.exitCode === 0) {
                     const match = result.stdout.match(/"myID"\s*:\s*"([^"]+)"/);
@@ -86,6 +91,8 @@ export function SyncthingTab({
                     } else {
                         setDeviceId("unable to parse");
                     }
+                } else if (!cancelled) {
+                    setDeviceId("unavailable");
                 }
             } catch {
                 if (!cancelled) setDeviceId("unavailable");
@@ -96,6 +103,7 @@ export function SyncthingTab({
             try {
                 const result = await execa(showConnsCmd.command, showConnsCmd.args, {
                     reject: false,
+                    timeout: 10000,
                 });
                 if (!cancelled && result.exitCode === 0) {
                     const lines: string[] = [];
@@ -117,7 +125,12 @@ export function SyncthingTab({
                     }
                     setConnectionLines(lines);
                 } else if (!cancelled) {
-                    setConnectionLines(["  syncthing CLI not available"]);
+                    const errorMessage =
+                        result.stderr.trim() || result.stdout.trim() || "unknown error";
+                    setConnectionLines([
+                        "  Unable to fetch Syncthing connections:",
+                        ...errorMessage.split("\n").map((errorLine) => `  ${errorLine}`),
+                    ]);
                 }
             } catch {
                 if (!cancelled) setConnectionLines(["  Failed to fetch connections"]);
@@ -131,7 +144,7 @@ export function SyncthingTab({
         return () => {
             cancelled = true;
         };
-    }, [refreshTrigger]);
+    }, [refreshTrigger, detailsRefreshTrigger]);
 
     return (
         <Box flexDirection="column" gap={1}>
