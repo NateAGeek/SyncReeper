@@ -36,7 +36,7 @@ Or if you've already cloned the repository:
 The script will:
 
 1. Detect your OS (Debian/Fedora/Arch/macOS)
-2. Install missing prerequisites (Git, NVM, Node.js 20, pnpm, Pulumi)
+2. Install missing prerequisites (Git, NVM, Node.js 20, pnpm, Pulumi, and Syncthing on macOS)
 3. Install all workspace dependencies (`pnpm install`)
 4. Build all packages (`pnpm run build`)
 5. Link the `syncreeper` CLI globally
@@ -99,6 +99,7 @@ Both **classic** and **fine-grained** tokens are supported.
 #### macOS (Local Deployment)
 
 - Homebrew is required (the installer will install it if missing)
+- The installer uses the Homebrew Syncthing formula and `homebrew.mxcl.syncthing` launchd service
 - macOS deployment uses `launchd` instead of systemd
 - The current user is used as the service user (no separate system user)
 

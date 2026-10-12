@@ -136,6 +136,23 @@ describe("Syncthing CLI Config Script Generation", () => {
             expect(script).not.toContain("sudo -u");
         });
 
+        it("should use the configured Syncthing directory for every CLI command", () => {
+            const script = generateDarwinScript(
+                ["DEV-1"],
+                "repos",
+                "/Users/me/repos",
+                "/Users/me/Library/Application Support/Syncthing"
+            );
+            const commands = script.match(/^syncthing cli .*$/gm) ?? [];
+
+            expect(commands.length).toBeGreaterThan(0);
+            expect(
+                commands.every((command) =>
+                    command.includes('--home="/Users/me/Library/Application Support/Syncthing"')
+                )
+            ).toBe(true);
+        });
+
         it("should include export HOME for macOS environment", () => {
             const script = generateDarwinScript([], "repos", "/Users/me/repos", "/config");
             expect(script).toContain('export HOME="$HOME"');

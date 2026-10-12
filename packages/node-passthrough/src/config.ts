@@ -101,6 +101,20 @@ export function getLogErrPath(): string {
 }
 
 /**
+ * Gets the structured health event log path
+ */
+export function getHealthLogPath(): string {
+    return join(DEFAULTS.logDir, "passthrough.health.log");
+}
+
+/**
+ * Gets the wrapper script path (installed to /usr/local/bin for LaunchDaemon access)
+ */
+export function getWrapperScriptPath(): string {
+    return `/usr/local/bin/syncreeper-passthrough-watchdog`;
+}
+
+/**
  * Loads the passthrough client configuration.
  * Returns null if the config file doesn't exist.
  */

@@ -8,6 +8,8 @@ import { asServiceUser, asSystemService } from "../utils/userCommand.utils.js";
 import type { TabActionProps } from "../types.js";
 import { useEffect, useRef } from "react";
 
+const MACOS_SYNCTHING_SERVICE = "homebrew.mxcl.syncthing";
+
 interface ServiceRow {
     name: string;
     command: string;
@@ -80,10 +82,10 @@ function getServiceChecks(): ServiceRow[] {
             {
                 name: "Syncthing",
                 command: "launchctl",
-                args: ["list", "syncthing"],
+                args: ["list", MACOS_SYNCTHING_SERVICE],
                 unit: "syncthing",
                 userLevel: true,
-                launchctlLabel: "syncthing",
+                launchctlLabel: MACOS_SYNCTHING_SERVICE,
             },
             {
                 name: "Passthrough Tunnel",

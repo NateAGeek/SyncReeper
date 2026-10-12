@@ -9,12 +9,14 @@ import { asServiceUser } from "../utils/userCommand.utils.js";
 import { execa } from "execa";
 import type { TabActionProps } from "../types.js";
 
+const MACOS_SYNCTHING_SERVICE = "homebrew.mxcl.syncthing";
+
 function getServiceStatusCommand(): { command: string; args: string[] } {
     if (isLinux()) {
         return asServiceUser("systemctl", ["--user", "status", "syncthing"]);
     }
     if (isMacOS()) {
-        return { command: "launchctl", args: ["list", "syncthing"] };
+        return { command: "launchctl", args: ["list", MACOS_SYNCTHING_SERVICE] };
     }
     return { command: "echo", args: ["unsupported"] };
 }
@@ -24,7 +26,11 @@ function getPrimaryUnit(): { unit: string; userLevel: boolean; launchctlLabel?: 
         return { unit: "syncthing", userLevel: true };
     }
     if (isMacOS()) {
-        return { unit: "syncthing", userLevel: true, launchctlLabel: "syncthing" };
+        return {
+            unit: "syncthing",
+            userLevel: true,
+            launchctlLabel: MACOS_SYNCTHING_SERVICE,
+        };
     }
     return { unit: "syncthing", userLevel: true };
 }
@@ -121,6 +127,10 @@ export function SyncthingTab({
         }
 
         fetchDetails();
+
+        return () => {
+            cancelled = true;
+        };
     }, [refreshTrigger]);
 
     return (
@@ -133,9 +143,7 @@ export function SyncthingTab({
 
                 <Box gap={1}>
                     <Text bold>This Device:</Text>
-                    <Text>
-                        {deviceId.length > 50 ? deviceId.substring(0, 50) + "..." : deviceId}
-                    </Text>
+                    <Text>{deviceId}</Text>
                 </Box>
 
                 <Box marginTop={1}>

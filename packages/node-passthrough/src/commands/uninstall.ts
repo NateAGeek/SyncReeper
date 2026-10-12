@@ -16,6 +16,7 @@ import {
     getPlistPath,
     getConfigPath,
     getLegacyPlistPath,
+    getWrapperScriptPath,
     DEFAULTS,
 } from "../config.js";
 
@@ -48,6 +49,19 @@ export async function uninstall(): Promise<void> {
         }
     } else {
         console.log("LaunchDaemon not found (already removed).");
+    }
+
+    // Step 1a: Remove the watchdog wrapper script
+    const wrapperPath = getWrapperScriptPath();
+    if (existsSync(wrapperPath)) {
+        console.log("Removing watchdog wrapper script...");
+        try {
+            await execa("sudo", ["rm", wrapperPath], { stdio: "inherit" });
+            console.log("Watchdog wrapper script removed.");
+        } catch {
+            console.error(`Failed to remove watchdog script. You may need to remove it manually:`);
+            console.error(`  sudo rm ${wrapperPath}`);
+        }
     }
 
     // Step 1b: Clean up legacy LaunchAgent if it still exists

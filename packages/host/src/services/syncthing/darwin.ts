@@ -19,7 +19,7 @@ export function generateSyncthingCliConfigScript(
     trustedDevices: string[],
     folderId: string,
     reposPath: string,
-    _syncthingConfig: string
+    syncthingConfig: string
 ): string {
     const folderLabel = "GitHub Repositories";
 
@@ -30,7 +30,7 @@ export function generateSyncthingCliConfigScript(
             return `
 # Add trusted device: ${deviceName}
 echo "Adding device: ${deviceName} (${deviceId})..."
-syncthing cli config devices add --device-id "${deviceId}" --name "${deviceName}" 2>/dev/null || echo "Device may already exist, continuing..."`;
+syncthing cli --home="${syncthingConfig}" config devices add --device-id "${deviceId}" --name "${deviceName}" 2>/dev/null || echo "Device may already exist, continuing..."`;
         })
         .join("\n");
 
@@ -41,7 +41,7 @@ syncthing cli config devices add --device-id "${deviceId}" --name "${deviceName}
             return `
 # Share folder with ${deviceName}
 echo "Sharing folder '${folderId}' with ${deviceName}..."
-syncthing cli config folders "${folderId}" devices add --device-id "${deviceId}" 2>/dev/null || echo "Device may already be shared, continuing..."`;
+syncthing cli --home="${syncthingConfig}" config folders "${folderId}" devices add --device-id "${deviceId}" 2>/dev/null || echo "Device may already be shared, continuing..."`;
         })
         .join("\n");
 
@@ -55,12 +55,12 @@ echo ""
 
 # Remove default folder if it exists
 echo "Removing default folder if present..."
-syncthing cli config folders remove "default" 2>/dev/null || true
+syncthing cli --home="${syncthingConfig}" config folders remove "default" 2>/dev/null || true
 
 # Create the repos folder
 echo ""
 echo "Creating folder: ${folderId}"
-syncthing cli config folders add --id "${folderId}" --path "${reposPath}" --label "${folderLabel}" 2>/dev/null || echo "Folder may already exist, continuing..."
+syncthing cli --home="${syncthingConfig}" config folders add --id "${folderId}" --path "${reposPath}" --label "${folderLabel}" 2>/dev/null || echo "Folder may already exist, continuing..."
 
 # Add trusted devices
 echo ""
@@ -125,7 +125,7 @@ export function setupSyncthingDarwin(options: SetupSyncthingOptions): SetupSynct
         create: `
             if [ ! -f "${paths.syncthingConfig}/cert.pem" ]; then
                 echo "Generating Syncthing keys..."
-                syncthing generate --config="${paths.syncthingConfig}"
+                syncthing generate --home="${paths.syncthingConfig}"
                 echo "Generated Syncthing keys and initial config"
             else
                 echo "Syncthing keys already exist, skipping generation"
@@ -161,7 +161,7 @@ export function setupSyncthingDarwin(options: SetupSyncthingOptions): SetupSynct
         create: `
             echo "Waiting for Syncthing to be ready..."
             for i in $(seq 1 30); do
-                if syncthing cli config devices list >/dev/null 2>&1; then
+                if syncthing cli --home="${paths.syncthingConfig}" config devices list >/dev/null 2>&1; then
                     echo "Syncthing is ready"
                     exit 0
                 fi
@@ -207,7 +207,7 @@ set -e
 CONFIG_DIR="${paths.syncthingConfig}"
 
 if [ -f "$CONFIG_DIR/cert.pem" ]; then
-    DEVICE_ID=$(syncthing device-id --config="$CONFIG_DIR" 2>/dev/null || echo "")
+    DEVICE_ID=$(syncthing device-id --home="$CONFIG_DIR" 2>/dev/null || echo "")
 fi
 
 if [ -z "$DEVICE_ID" ]; then
@@ -245,7 +245,7 @@ EOF
             brew services list | grep syncthing || echo "Syncthing service status unknown"
             echo ""
             echo "Device ID:"
-            syncthing device-id --config="${paths.syncthingConfig}" 2>/dev/null || echo "Could not get device ID"
+            syncthing device-id --home="${paths.syncthingConfig}" 2>/dev/null || echo "Could not get device ID"
             echo ""
             echo "Syncthing configured successfully!"
             echo "Access GUI at: http://localhost:8384"

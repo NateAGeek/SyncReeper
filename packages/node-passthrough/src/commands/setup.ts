@@ -24,6 +24,7 @@ import {
     getLegacyPlistPath,
     getLogOutPath,
     getLogErrPath,
+    getHealthLogPath,
     saveConfig,
     loadConfig,
     type PassthroughClientConfig,
@@ -382,10 +383,11 @@ export async function setup(): Promise<void> {
     console.log("Tunnel logs are written to:");
     console.log(`  stdout: ${getLogOutPath()}`);
     console.log(`  stderr: ${getLogErrPath()}`);
+    console.log(`  health: ${getHealthLogPath()}`);
     console.log("");
     console.log("The tunnel runs as a system LaunchDaemon and will:");
     console.log("  - Start automatically at boot (no login required)");
     console.log("  - Persist across logout and lock screen");
-    console.log("  - Auto-reconnect if the connection drops");
+    console.log("  - Auto-reconnect if the connection drops (with watchdog health checks)");
     console.log("");
 }

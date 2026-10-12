@@ -27,6 +27,7 @@ const PASSTHROUGH_LEGACY_AGENT_PATH = join(
 );
 const PASSTHROUGH_CONFIG_PATH = join(homedir(), ".config", "syncreeper", "passthrough.json");
 const PASSTHROUGH_LOG_ERR = "/var/log/syncreeper/passthrough.err.log";
+const PASSTHROUGH_HEALTH_LOG = "/var/log/syncreeper/passthrough.health.log";
 
 interface PassthroughClientConfig {
     vpsAddress: string;
@@ -42,6 +43,9 @@ interface MacInstallState {
     configFound: boolean;
     config: PassthroughClientConfig | null;
     autosshPid: string | null;
+    totalRestarts: number;
+    lastHealthCheck: string | null;
+    lastProbeStatus: "ok" | "fail" | null;
 }
 
 async function loadPassthroughConfig(): Promise<PassthroughClientConfig | null> {
@@ -81,6 +85,9 @@ export function PassthroughTab({
         configFound: false,
         config: null,
         autosshPid: null,
+        totalRestarts: 0,
+        lastHealthCheck: null,
+        lastProbeStatus: null,
     });
 
     // macOS service status (LaunchDaemon, system domain)
@@ -191,6 +198,43 @@ export function PassthroughTab({
                 const configFound = config !== null;
                 const autosshPid = await findAutosshPid(config?.vpsAddress);
 
+                let totalRestarts = 0;
+                let lastHealthCheck = null;
+                let lastProbeStatus: "ok" | "fail" | null = null;
+
+                if (existsSync(PASSTHROUGH_HEALTH_LOG)) {
+                    try {
+                        const healthContent = await readFile(PASSTHROUGH_HEALTH_LOG, "utf-8");
+                        const lines = healthContent.trim().split("\n").filter(Boolean);
+                        if (lines.length > 0) {
+                            try {
+                                const lastLineStr = lines[lines.length - 1];
+                                const parsed = JSON.parse(lastLineStr);
+                                totalRestarts =
+                                    typeof parsed.restarts === "number" ? parsed.restarts : 0;
+                            } catch {
+                                // ignore
+                            }
+
+                            // Find the last health_check event
+                            for (let i = lines.length - 1; i >= 0; i--) {
+                                try {
+                                    const parsed = JSON.parse(lines[i]);
+                                    if (parsed.event === "health_check") {
+                                        lastHealthCheck = parsed.detail;
+                                        lastProbeStatus = parsed.status === "ok" ? "ok" : "fail";
+                                        break;
+                                    }
+                                } catch {
+                                    // ignore
+                                }
+                            }
+                        }
+                    } catch {
+                        // ignore
+                    }
+                }
+
                 if (cancelled) return;
 
                 setMacState({
@@ -199,17 +243,18 @@ export function PassthroughTab({
                     configFound,
                     config,
                     autosshPid,
+                    totalRestarts,
+                    lastHealthCheck,
+                    lastProbeStatus,
                 });
                 setUserExists(null);
                 setTunnelPort(config ? String(config.tunnelPort) : "2222");
 
                 // Tail the err log if it exists and is readable
                 if (existsSync(PASSTHROUGH_LOG_ERR)) {
-                    const tail = await execa(
-                        "tail",
-                        ["-n", "50", PASSTHROUGH_LOG_ERR],
-                        { reject: false }
-                    );
+                    const tail = await execa("tail", ["-n", "50", PASSTHROUGH_LOG_ERR], {
+                        reject: false,
+                    });
                     if (!cancelled) {
                         if (tail.exitCode === 0 && tail.stdout.trim()) {
                             setLogLines(tail.stdout.split("\n"));
@@ -246,8 +291,16 @@ export function PassthroughTab({
 
     // --- macOS rendering branch -------------------------------------------
     if (isMacOS()) {
-        const { daemonInstalled, legacyAgentInstalled, configFound, config, autosshPid } =
-            macState;
+        const {
+            daemonInstalled,
+            legacyAgentInstalled,
+            configFound,
+            config,
+            autosshPid,
+            totalRestarts,
+            lastHealthCheck,
+            lastProbeStatus,
+        } = macState;
 
         // Determine the "on-start config" install state:
         // - installed   : LaunchDaemon plist present at /Library/LaunchDaemons
@@ -298,8 +351,8 @@ export function PassthroughTab({
                         <Text bold>Client config:</Text>
                         {configFound && config ? (
                             <Text>
-                                {config.tunnelUser}@{config.vpsAddress}:{config.vpsPort} →
-                                tunnel :{config.tunnelPort}
+                                {config.tunnelUser}@{config.vpsAddress}:{config.vpsPort} → tunnel :
+                                {config.tunnelPort}
                             </Text>
                         ) : (
                             <Text color="red">missing ({PASSTHROUGH_CONFIG_PATH})</Text>
@@ -311,14 +364,32 @@ export function PassthroughTab({
                         <Text>{autosshPid ?? "not running"}</Text>
                     </Box>
 
+                    <Box gap={1}>
+                        <Text bold>Tunnel health:</Text>
+                        {isLoading ? (
+                            <Text color="yellow">checking...</Text>
+                        ) : lastProbeStatus === "ok" ? (
+                            <StatusBadge status="active" />
+                        ) : lastProbeStatus === "fail" ? (
+                            <StatusBadge status="error" />
+                        ) : (
+                            <Text dimColor>no data (watchdog not running)</Text>
+                        )}
+                        {lastHealthCheck && <Text dimColor>({lastHealthCheck})</Text>}
+                    </Box>
+
+                    <Box gap={1}>
+                        <Text bold>Watchdog restarts:</Text>
+                        <Text color={totalRestarts > 0 ? "yellow" : "green"}>{totalRestarts}</Text>
+                    </Box>
+
                     <Box marginTop={1} flexDirection="column">
                         <Text dimColor>
                             s/x/R targets: {PASSTHROUGH_LABEL} (system domain — needs sudo)
                         </Text>
                         {!daemonInstalled && (
                             <Text dimColor>
-                                Run `syncreeper-passthrough setup` to install the on-start
-                                config.
+                                Run `syncreeper-passthrough setup` to install the on-start config.
                             </Text>
                         )}
                     </Box>

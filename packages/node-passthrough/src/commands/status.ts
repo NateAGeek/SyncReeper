@@ -10,7 +10,15 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { execa } from "execa";
 
-import { loadConfig, getPlistPath, configExists, DEFAULTS, getLogErrPath } from "../config.js";
+import {
+    loadConfig,
+    getPlistPath,
+    configExists,
+    DEFAULTS,
+    getLogErrPath,
+    getHealthLogPath,
+    getWrapperScriptPath,
+} from "../config.js";
 
 /**
  * Check the status of the passthrough tunnel
@@ -101,6 +109,9 @@ export async function status(): Promise<void> {
         }
     }
 
+    // Show tunnel health from structured event log
+    await showTunnelHealth();
+
     // Connection instructions
     console.log("To connect from VPS to this machine:");
     console.log(`  ssh <your-user>@localhost -p ${config.tunnelPort}`);
@@ -147,6 +158,83 @@ async function showPowerStatus(): Promise<void> {
         }
     } catch {
         console.log("  Could not read power settings (pmset -g custom)");
+    }
+
+    console.log("");
+}
+
+interface HealthEvent {
+    ts: string;
+    event: string;
+    status: string;
+    restarts: number;
+    detail: string;
+}
+
+/**
+ * Reads and displays tunnel health from the structured event log.
+ */
+async function showTunnelHealth(): Promise<void> {
+    const healthLog = getHealthLogPath();
+    const wrapperScript = getWrapperScriptPath();
+
+    console.log("Tunnel health monitoring:");
+    console.log(`  Watchdog script: ${existsSync(wrapperScript) ? "installed" : "NOT INSTALLED"}`);
+
+    if (!existsSync(healthLog)) {
+        console.log("  Health log:      no data yet (watchdog may not have started)");
+        console.log("");
+        return;
+    }
+
+    try {
+        const content = await readFile(healthLog, "utf-8");
+        const lines = content.trim().split("\n").filter(Boolean);
+
+        if (lines.length === 0) {
+            console.log("  Health log:      empty");
+            console.log("");
+            return;
+        }
+
+        const events: HealthEvent[] = [];
+        for (const line of lines) {
+            try {
+                events.push(JSON.parse(line) as HealthEvent);
+            } catch {
+                // Skip malformed lines
+            }
+        }
+
+        if (events.length === 0) {
+            console.log("  Health log:      no parseable events");
+            console.log("");
+            return;
+        }
+
+        const lastEvent = events[events.length - 1];
+        const totalRestarts = lastEvent.restarts;
+
+        const healthChecks = events.filter((e) => e.event === "health_check");
+        const failedChecks = healthChecks.filter((e) => e.status === "fail");
+        const restartEvents = events.filter((e) => e.event === "tunnel_restart");
+
+        console.log(`  Total restarts:  ${totalRestarts}`);
+        console.log(`  Health probes:   ${healthChecks.length} (${failedChecks.length} failed)`);
+
+        if (restartEvents.length > 0) {
+            const lastRestart = restartEvents[restartEvents.length - 1];
+            console.log(`  Last restart:    ${lastRestart.ts} — ${lastRestart.detail}`);
+        }
+
+        const recentEvents = events.slice(-5);
+        console.log("  Recent events:");
+        for (const evt of recentEvents) {
+            const icon = evt.status === "ok" ? "OK" : evt.status === "fail" ? "!!" : "??";
+            console.log(`    ${icon} [${evt.ts}] ${evt.event}: ${evt.detail}`);
+        }
+    } catch {
+        console.log("  Health log:      could not read (may need sudo)");
     }
 
     console.log("");

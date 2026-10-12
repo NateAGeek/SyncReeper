@@ -17,7 +17,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Ensure common bin paths are in PATH (for freshly installed tools)
-export PATH="$HOME/.pulumi/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
+export PATH="$HOME/.pulumi/bin:$HOME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$PATH"
 
 # NVM configuration
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
@@ -190,6 +190,18 @@ install_homebrew() {
     success "Homebrew $(brew --version | head -1) installed"
 }
 
+# Install the Homebrew Syncthing formula used by the macOS deployment and dashboard
+install_syncthing_macos() {
+    if brew list --formula syncthing &> /dev/null; then
+        success "Syncthing is installed ($(syncthing --version | head -1))"
+        return
+    fi
+
+    info "Installing Syncthing via Homebrew..."
+    brew install syncthing
+    success "Syncthing installed ($(syncthing --version | head -1))"
+}
+
 # Install Git
 install_git() {
     info "Installing Git..."
@@ -241,6 +253,8 @@ main() {
         else
             install_homebrew
         fi
+
+        install_syncthing_macos
     fi
 
     # Check Git

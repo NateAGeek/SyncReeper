@@ -17,7 +17,9 @@ import {
     getCurrentUsername,
     getLogOutPath,
     getLogErrPath,
+    getWrapperScriptPath,
 } from "../config.js";
+import { generateWrapperScript } from "./wrapper-script.js";
 
 /**
  * Finds the autossh binary path
@@ -45,8 +47,9 @@ export async function findAutosshPath(): Promise<string> {
  *     and persists across logout, lock screen, and sleep.
  *   - Logs to /var/log/syncreeper/ instead of /tmp/.
  */
-export function generatePlist(config: PassthroughClientConfig, autosshPath: string): string {
+export function generatePlist(_config: PassthroughClientConfig, _autosshPath: string): string {
     const username = getCurrentUsername();
+    const wrapperPath = getWrapperScriptPath();
 
     return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -63,25 +66,8 @@ export function generatePlist(config: PassthroughClientConfig, autosshPath: stri
 
     <key>ProgramArguments</key>
     <array>
-        <string>${autosshPath}</string>
-        <string>-M</string>
-        <string>0</string>
-        <string>-N</string>
-        <string>-o</string>
-        <string>ServerAliveInterval=30</string>
-        <string>-o</string>
-        <string>ServerAliveCountMax=3</string>
-        <string>-o</string>
-        <string>ExitOnForwardFailure=yes</string>
-        <string>-o</string>
-        <string>StrictHostKeyChecking=accept-new</string>
-        <string>-i</string>
-        <string>${config.keyPath}</string>
-        <string>-R</string>
-        <string>${config.tunnelPort}:localhost:22</string>
-        <string>-p</string>
-        <string>${config.vpsPort}</string>
-        <string>${config.tunnelUser}@${config.vpsAddress}</string>
+        <string>/bin/bash</string>
+        <string>${wrapperPath}</string>
     </array>
 
     <key>RunAtLoad</key>
@@ -135,15 +121,36 @@ async function writeDaemonPlist(plistContent: string): Promise<void> {
 }
 
 /**
+ * Writes the watchdog wrapper script to /usr/local/bin with correct
+ * ownership (root:wheel) and permissions (755). Requires sudo.
+ */
+async function writeWrapperScript(
+    config: PassthroughClientConfig,
+    autosshPath: string
+): Promise<void> {
+    const wrapperPath = getWrapperScriptPath();
+    const scriptContent = generateWrapperScript(config, autosshPath);
+
+    const tmpPath = `/tmp/${DEFAULTS.plistLabel}-watchdog.sh`;
+    await writeFile(tmpPath, scriptContent, "utf-8");
+
+    await execa("sudo", ["mkdir", "-p", "/usr/local/bin"], { stdio: "inherit" });
+    await execa("sudo", ["mv", tmpPath, wrapperPath], { stdio: "inherit" });
+    await execa("sudo", ["chown", "root:wheel", wrapperPath], { stdio: "inherit" });
+    await execa("sudo", ["chmod", "755", wrapperPath], { stdio: "inherit" });
+}
+
+/**
  * Generates and installs the LaunchDaemon plist from saved config.
- * Creates the log directory, writes the plist with correct permissions,
- * and optionally loads the daemon.
+ * Creates the log directory, writes the wrapper script and plist with
+ * correct permissions, and optionally loads the daemon.
  */
 export async function generatePlistFromConfig(config: PassthroughClientConfig): Promise<void> {
     const autosshPath = await findAutosshPath();
     const plistContent = generatePlist(config, autosshPath);
 
     await ensureLogDir();
+    await writeWrapperScript(config, autosshPath);
     await writeDaemonPlist(plistContent);
 }
 
